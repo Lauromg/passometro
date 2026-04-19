@@ -971,10 +971,10 @@ function renderExames(bed) {
     html += `<tr style="border-bottom:1px solid var(--border); ${bg}">`;
     html += `<td style="padding:8px; font-size:13px; font-weight:600; color:var(--text-primary); position:sticky; left:0; background:var(--bg-card); z-index:1; border-right:1px solid var(--border);">${f.name} <span style="font-size:10px; color:var(--text-muted); font-weight:normal;">${f.unit ? `(${f.unit})` : ''}</span></td>`;
     
-    sortedExams.forEach((exam) => {
+    sortedExams.forEach((exam, cIdx) => {
       const origIdx = bed.exams.findIndex(e => e === exam);
       html += `<td style="padding:6px; border-right:1px solid var(--border);">`;
-      html += `<input type="text" value="${escapeAttr(exam[f.id] || '')}" onchange="updateExam(${origIdx},'${f.id}',this.value)" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
+      html += `<input type="text" value="${escapeAttr(exam[f.id] || '')}" onchange="updateExam(${origIdx},'${f.id}',this.value)" class="exam-value-input" data-row="${rIndex}" data-col="${cIdx}" onkeydown="handleExamKeydown(event, this)" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
       html += `</td>`;
     });
     html += `<td></td></tr>`;
@@ -991,10 +991,10 @@ function renderExames(bed) {
     html += `<button class="btn btn-danger btn-sm btn-icon" onclick="deleteCustomExam(${cIdx})" style="padding:4px 8px; font-size:10px;" title="Excluir Linha">✕</button>`;
     html += `</div></td>`;
     
-    sortedExams.forEach((exam) => {
+    sortedExams.forEach((exam, cIdx) => {
       const origIdx = bed.exams.findIndex(e => e === exam);
       html += `<td style="padding:6px; border-right:1px solid var(--border);">`;
-      html += `<input type="text" value="${escapeAttr(exam[cExam.id] || '')}" onchange="updateExam(${origIdx},'${cExam.id}',this.value)" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
+      html += `<input type="text" value="${escapeAttr(exam[cExam.id] || '')}" onchange="updateExam(${origIdx},'${cExam.id}',this.value)" class="exam-value-input" data-row="${rIndex}" data-col="${cIdx}" onkeydown="handleExamKeydown(event, this)" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
       html += `</td>`;
     });
     html += `<td></td></tr>`;
@@ -1015,6 +1015,38 @@ function renderExames(bed) {
   } catch (e) {
     container.innerHTML = '<div style="color:var(--danger); padding: 15px; border: 1px solid var(--danger);"><strong>Erro ao renderizar tabela de exames:</strong><br>' + e.message + '</div>';
     console.error(e);
+  }
+}
+
+function handleExamKeydown(e, input) {
+  if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault();
+    const r = parseInt(input.dataset.row);
+    const c = parseInt(input.dataset.col);
+    const isShift = e.shiftKey;
+    
+    const nextRow = isShift ? (r - 1) : (r + 1);
+    let nextInput = document.querySelector(`.exam-value-input[data-row="${nextRow}"][data-col="${c}"]`);
+    
+    if (nextInput) {
+      nextInput.focus();
+      nextInput.select();
+    } else {
+      if (!isShift && (e.key === 'Tab' || e.key === 'Enter')) {
+        let nextColStart = document.querySelector(`.exam-value-input[data-row="0"][data-col="${c+1}"]`);
+        if (nextColStart) {
+          nextColStart.focus();
+          nextColStart.select();
+        }
+      } else if (isShift && (e.key === 'Tab' || e.key === 'Enter')) {
+        let prevColInputs = document.querySelectorAll(`.exam-value-input[data-col="${c-1}"]`);
+        if (prevColInputs.length > 0) {
+          let lastPrevColInput = prevColInputs[prevColInputs.length - 1];
+          lastPrevColInput.focus();
+          lastPrevColInput.select();
+        }
+      }
+    }
   }
 }
 
