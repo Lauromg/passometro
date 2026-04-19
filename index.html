@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Passômetro UTI – HSJ</title>
+    <meta name="description" content="Sistema de passagem de plantão da UTI do Hospital São José">
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+</head>
+
+<body>
+
+    <!-- ===== LOGIN SCREEN ===== -->
+    <div id="login-screen">
+        <div class="login-box">
+            <span class="icon">🏥</span>
+            <h1>Passômetro UTI</h1>
+            <p class="subtitle">Hospital São José – Passagem de Plantão</p>
+            <div class="login-field">
+                <label>E-mail</label>
+                <input type="email" id="login-email" placeholder="seu@email.com">
+            </div>
+            <div class="login-field">
+                <label>Senha</label>
+                <input type="password" id="login-password" placeholder="••••••••">
+            </div>
+            <button class="btn-login" id="btn-login">Entrar</button>
+            <div class="login-error" id="login-error">E-mail ou senha incorretos.</div>
+        </div>
+    </div>
+
+    <!-- ===== APP CONTAINER ===== -->
+    <div id="app-container">
+
+        <!-- HEADER -->
+        <header class="header no-print">
+            <div class="header-left">
+                <span class="header-logo">Passômetro UTI</span>
+                <span class="header-badge">HSJ</span>
+            </div>
+            <div class="header-right">
+                <span class="header-date" id="header-date"></span>
+
+                <button class="btn-header btn-print" onclick="printPassometro()">🖨️ Imprimir</button>
+                <button class="btn-header btn-logout" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <!-- DASHBOARD VIEW -->
+        <div id="view-dashboard">
+            <div class="beds-grid" id="beds-grid"></div>
+        </div>
+
+        <!-- PATIENT DETAIL VIEW -->
+        <div id="view-patient">
+            <button class="back-btn" onclick="closeBed()">← Voltar aos leitos</button>
+
+            <!-- Patient Header -->
+            <div class="patient-header">
+                <div style="flex:0 0 auto;">
+                    <span id="patient-bed-number"
+                        style="font-size:13px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;"></span>
+                </div>
+                <div class="field-group" style="flex:2;min-width:200px;">
+                    <label>Nome do Paciente</label>
+                    <input type="text" id="patient-name" placeholder="Nome completo"
+                        oninput="updatePatientField('name', this.value)">
+                </div>
+                <div class="field-group small">
+                    <label>Idade</label>
+                    <input type="number" id="patient-age" placeholder="Anos" min="0" max="150"
+                        oninput="updatePatientField('age', this.value)">
+                </div>
+                <div class="field-group small">
+                    <label>Plano de Saúde</label>
+                    <select id="patient-plan" onchange="updatePatientField('plan', this.value)">
+                        <option value="">Selecione...</option>
+                        <option value="sus">SUS</option>
+                        <option value="unimed">Unimed</option>
+                        <option value="hapvida">Hapvida</option>
+                        <option value="particular">Particular</option>
+                    </select>
+                </div>
+                <div class="field-group small">
+                    <label>Data Internação</label>
+                    <input type="date" id="patient-data-internacao"
+                        onchange="updatePatientField('dataInternacao', this.value)">
+                </div>
+                <div style="flex:0 0 auto;align-self:flex-end;padding-bottom:10px;">
+                    <span id="patient-ddi" class="badge badge-age" style="font-size:13px;padding:6px 14px;"></span>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="historia" onclick="switchTab('historia')">📋 História</button>
+                <button class="tab-btn" data-tab="evolucao" onclick="switchTab('evolucao')">📝 Evolução</button>
+                <button class="tab-btn" data-tab="antibioticos" onclick="switchTab('antibioticos')">💊
+                    Antibióticos</button>
+                <button class="tab-btn" data-tab="dispositivos" onclick="switchTab('dispositivos')">🔌 Dispositivos /
+                    Drogas</button>
+                <button class="tab-btn" data-tab="exames" onclick="switchTab('exames')">📊 Exames</button>
+                <button class="tab-btn" data-tab="balanco" onclick="switchTab('balanco')">💧 Balanço</button>
+            </div>
+
+            <!-- Tab Contents -->
+
+            <!-- HISTORIA -->
+            <div class="tab-content active" id="tab-historia">
+                <div class="section-card">
+                    <h3>🩺 Diagnósticos Ativos</h3>
+                    <div class="field-group">
+                        <textarea id="input-diagnosticos" rows="3"
+                            placeholder="Sepse de foco pulmonar, IRA KDIGO 3, Choque séptico..."
+                            oninput="updatePatientField('diagnosticos', this.value)"></textarea>
+                    </div>
+                </div>
+                <div class="section-card">
+                    <h3>📋 HPP – História Patológica Pregressa</h3>
+                    <div class="field-group">
+                        <textarea id="input-hpp" rows="4"
+                            placeholder="HAS, DM2, IRC, DPOC, IAM prévio, cirurgias anteriores..."
+                            oninput="updatePatientField('hpp', this.value)"></textarea>
+                    </div>
+                </div>
+                <div class="section-card">
+                    <h3>🏥 HMA – História da Moléstia Atual</h3>
+                    <div class="field-group">
+                        <textarea id="input-hma" rows="6" placeholder="Motivo da internação, evolução até o momento..."
+                            oninput="updatePatientField('hma', this.value)"></textarea>
+                    </div>
+                </div>
+                <div class="section-card"
+                    style="border: 1px solid rgba(245,158,11,0.3); background: rgba(245,158,11,0.05);">
+                    <h3 style="color: var(--warning);">📋 Pendências para o Plantão</h3>
+                    <div class="field-group">
+                        <textarea id="input-pendencias" rows="4" placeholder="Uma pendência por linha:
+Chevar Hb/Ht de controle às 18h
+Solicitar avaliação da nefro
+Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', this.value)"></textarea>
+                    </div>
+                </div>
+                <div class="clear-patient-area">
+                    <button class="btn btn-danger" onclick="clearPatient()">🗑️ Limpar Leito (Alta / Óbito)</button>
+                </div>
+            </div>
+
+            <!-- EVOLUÇÃO -->
+            <div class="tab-content" id="tab-evolucao">
+                <div class="section-card">
+                    <h3>📝 Evoluções por Plantão</h3>
+                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Plantões de 12h (Diurno /
+                        Noturno). Cada plantão deve ter pelo menos uma evolução.</p>
+                    <div class="evolution-list" id="evolution-list"></div>
+
+                    <div class="new-evolution">
+                        <h4>+ Nova Evolução</h4>
+                        <div class="row" style="margin-bottom:12px;">
+                            <div class="field-group" style="flex:0 0 auto;">
+                                <label>Data</label>
+                                <input type="text" id="new-evo-date" placeholder="DD/MM/AAAA">
+                            </div>
+                            <div class="field-group" style="flex:0 0 auto;">
+                                <label>Turno</label>
+                                <div class="shift-toggle">
+                                    <button class="active-day" data-shift="day" onclick="selectShift('day')">☀️
+                                        Diurno</button>
+                                    <button data-shift="night" onclick="selectShift('night')">🌙 Noturno</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="field-group">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <label style="margin-bottom:0;">Evolução (obrigatória)</label>
+                                <button class="btn btn-sm" onclick="inserirBalancoNaEvolucao()" style="font-size:11px; padding:2px 8px; border:1px solid var(--border); border-radius:4px; background:var(--surface); color:var(--text-secondary); cursor:pointer;">+ Inserir Balanço</button>
+                            </div>
+                            <textarea id="new-evo-text" rows="4"
+                                placeholder="Descreva a evolução do paciente neste plantão..."></textarea>
+                        </div>
+                        <button class="btn btn-primary" onclick="addEvolution()">✓ Adicionar Evolução</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ANTIBIÓTICOS -->
+            <div class="tab-content" id="tab-antibioticos">
+                <div class="section-card">
+                    <h3>💊 Antibióticos em Uso</h3>
+                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">D = número de dias desde o
+                        início do antibiótico (calculado automaticamente).</p>
+                    <table class="atb-table">
+                        <thead>
+                            <tr>
+                                <th>Antibiótico</th>
+                                <th style="width:140px;">Início</th>
+                                <th style="width:60px;text-align:center;">D</th>
+                                <th>Observações</th>
+                                <th style="width:40px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="atb-tbody"></tbody>
+                    </table>
+                    <div style="margin-top:12px;">
+                        <button class="btn btn-primary" onclick="addAtb()">+ Adicionar Antibiótico</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DISPOSITIVOS / DROGAS -->
+            <div class="tab-content" id="tab-dispositivos">
+                <div class="section-card">
+                    <h3>🔌 Dispositivos Invasivos & Drogas Vasoativas</h3>
+                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Marque os dispositivos
+                        ativos e adicione detalhes (local, dose, parâmetros).</p>
+                    <div class="devices-grid" id="devices-grid"></div>
+                </div>
+            </div>
+
+            <!-- EXAMES -->
+            <div class="tab-content" id="tab-exames">
+                <div class="section-card">
+                    <h3>📊 Exames Laboratoriais</h3>
+                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Adicione resultados de
+                        exames para acompanhar a evolução ao longo dos dias.</p>
+                        
+                    <div id="exam-entries"></div>
+
+                    <div style="margin-top: 20px; padding: 15px; border: 1px dashed var(--border); border-radius: 8px; background: rgba(0,0,0,0.01);">
+                        <h4 style="margin-bottom: 8px; font-size: 13px; color: var(--text-primary);">Extração Inteligente (Texto)</h4>
+                        <p style="font-size: 11px; color: var(--text-secondary); margin-bottom: 10px;">Cole o texto dos exames, dite ou use IA para gerar os valores. O sistema tentará reconhecer os valores para a data de hoje. Ex: "Hb 10, Ht 30, Ur 40, Cr 1.2".</p>
+                        <textarea id="import-text-exams" rows="3" placeholder="Cole ou digite os resultados aqui..." style="width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 10px; font-size: 13px; font-family: inherit; margin-bottom: 10px; box-sizing: border-box; resize: vertical;"></textarea>
+                        <button class="btn" style="border: 1px solid var(--accent); color: var(--accent); background: transparent;" onclick="parseTextExams()">✨ Preencher Valores na Tabela</button>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="section-card">
+                    <h3>📈 Gráficos de Evolução</h3>
+                    <div class="chart-container"><canvas id="chart-hemograma"></canvas></div>
+                    <div class="chart-container"><canvas id="chart-renal"></canvas></div>
+                    <div class="chart-container"><canvas id="chart-ions"></canvas></div>
+                </div>
+            </div>
+
+            <!-- BALANÇO (nursing data) -->
+            <div class="tab-content" id="tab-balanco">
+                <div class="section-card">
+                    <h3>💧 Balanço Hídrico (Enfermagem)</h3>
+                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Dados registrados pela
+                        equipe de enfermagem. Para editar, acesse a página de enfermagem.</p>
+                    <div id="balanco-detail-content">
+                        <p style="color:var(--text-muted);font-style:italic;">Nenhum dado de balanço registrado para
+                            hoje.</p>
+                    </div>
+                </div>
+            </div>
+
+        </div><!-- /view-patient -->
+    </div><!-- /app-container -->
+
+    <!-- SAVE INDICATOR -->
+    <div id="save-indicator" class="save-indicator no-print"></div>
+
+    <!-- APP LOGIC -->
+    <script src="app.js"></script>
+
+
+    <!-- FIREBASE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDoeVKrSwyWluQHSWlN4k7LWHbTMymTyzk",
+            authDomain: "passometro-562bd.firebaseapp.com",
+            projectId: "passometro-562bd",
+            storageBucket: "passometro-562bd.firebasestorage.app",
+            messagingSenderId: "617937355734",
+            appId: "1:617937355734:web:a02eaaae7febf12e159a77"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // Expose to app.js
+        window.firebaseDb = db;
+        window.firebaseAuth = auth;
+        window.firebaseAuthModule = { signOut };
+        window.firebaseFirestore = { doc, setDoc, getDoc, collection, query, orderBy, getDocs };
+
+        const loginScreen = document.getElementById('login-screen');
+        const appContainer = document.getElementById('app-container');
+        const btnLogin = document.getElementById('btn-login');
+        const loginError = document.getElementById('login-error');
+
+        const RESTRICTED_EMAILS = ['enfermagem@hsj.com.br'];
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                if (RESTRICTED_EMAILS.includes(user.email)) {
+                    window.location.replace('enfermagem.html');
+                    return;
+                }
+                loginScreen.style.display = 'none';
+                appContainer.style.display = 'block';
+                // Start the app after auth
+                if (window.startApp) window.startApp();
+            } else {
+                loginScreen.style.display = 'flex';
+                appContainer.style.display = 'none';
+            }
+        });
+
+        btnLogin.addEventListener('click', () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            loginError.style.display = 'none';
+
+            if (RESTRICTED_EMAILS.includes(email.trim().toLowerCase())) {
+                loginError.textContent = '🔒 Acesso restrito. Use a página de Enfermagem.';
+                loginError.style.display = 'block';
+                return;
+            }
+
+            signInWithEmailAndPassword(auth, email, password)
+                .catch((error) => {
+                    loginError.textContent = 'E-mail ou senha incorretos.';
+                    loginError.style.display = 'block';
+                    console.error('Login error:', error);
+                });
+        });
+
+        // Enter key on password field
+        document.getElementById('login-password').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') btnLogin.click();
+        });
+    </script>
+</body>
+
+</html>

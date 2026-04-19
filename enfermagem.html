@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Balanço Hídrico – Enfermagem UTI HSJ</title>
+    <meta name="description" content="Balanço hídrico 24h da UTI – Hospital São José">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="enfermagem.css">
+</head>
+
+<body>
+
+    <!-- ===== LOGIN ===== -->
+    <div id="login-screen">
+        <div class="login-box">
+            <span class="icon">🩺</span>
+            <h1>Balanço UTI</h1>
+            <p class="subtitle">Enfermagem – Hospital São José</p>
+            <div class="login-field">
+                <label>E-mail</label>
+                <input type="email" id="login-email" placeholder="enfermagem@hsj.com">
+            </div>
+            <div class="login-field">
+                <label>Senha</label>
+                <input type="password" id="login-password" placeholder="••••••••">
+            </div>
+            <button class="btn-login" id="btn-login">Entrar</button>
+            <div class="login-error" id="login-error">Credenciais incorretas.</div>
+        </div>
+    </div>
+
+    <!-- ===== APP ===== -->
+    <div id="app-container" style="display:none;">
+
+        <!-- HEADER -->
+        <header class="header no-print">
+            <div class="header-left">
+                <span class="header-logo">Balanço UTI</span>
+                <span class="header-badge">ENF</span>
+            </div>
+            <div class="header-right">
+                <span class="header-date" id="header-date"></span>
+                <button class="btn-header btn-print" onclick="printBalanco()">🖨️ Imprimir Balanço</button>
+                <button class="btn-header btn-logout" onclick="logout()">Sair</button>
+            </div>
+        </header>
+
+        <!-- ===== DASHBOARD: BED GRID ===== -->
+        <div id="view-dashboard">
+            <div class="beds-grid" id="beds-grid"></div>
+        </div>
+
+        <!-- ===== PATIENT BALANCE VIEW ===== -->
+        <div id="view-balance" style="display:none;">
+            <button class="back-btn" onclick="goBack()">← Voltar aos Leitos</button>
+
+            <div class="balance-header">
+                <h2 id="bal-bed-title">Leito 1</h2>
+                <span id="bal-patient-name" class="bal-patient-label"></span>
+                <div class="bal-shift-selector">
+                    <label>Turno:</label>
+                    <select id="bal-shift" onchange="switchShift(this.value)">
+                        <option value="diurno">☀️ Diurno (07h – 19h)</option>
+                        <option value="noturno">🌙 Noturno (19h – 07h)</option>
+                    </select>
+                    <label style="margin-left:12px;">Data:</label>
+                    <input type="date" id="bal-date" onchange="switchDate(this.value)">
+                </div>
+            </div>
+
+            <!-- TABS -->
+            <div class="tabs">
+                <button class="tab-btn active" onclick="switchTab('sinais', this)">Sinais Vitais</button>
+                <button class="tab-btn" onclick="switchTab('glicemia', this)">Glicemia</button>
+                <button class="tab-btn" onclick="switchTab('ganhos', this)">Ganhos (Infusão)</button>
+                <button class="tab-btn" onclick="switchTab('perdas', this)">Perdas</button>
+                <button class="tab-btn" onclick="switchTab('resumo', this)">Resumo / BH</button>
+            </div>
+
+            <!-- TAB: SINAIS VITAIS -->
+            <div class="tab-content active" id="tab-sinais">
+                <div class="section-card">
+                    <h3>🫀 Sinais Vitais</h3>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Preencha a cada 1h ou 2h
+                        conforme prescrição.</p>
+                    <div class="sv-table-wrapper">
+                        <table class="sv-table" id="sv-table">
+                            <thead>
+                                <tr>
+                                    <th>Hora</th>
+                                    <th>PA (mmHg)</th>
+                                    <th>FC</th>
+                                    <th>FR</th>
+                                    <th>SpO₂%</th>
+                                    <th>Tax °C</th>
+                                    <th>Obs</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sv-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: GLICEMIA -->
+            <div class="tab-content" id="tab-glicemia">
+                <div class="section-card">
+                    <h3>🩸 Glicemia Capilar / HGT</h3>
+                    <table class="sv-table" id="glic-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Valor (mg/dL)</th>
+                                <th>Insulina (UI)</th>
+                                <th>Obs</th>
+                            </tr>
+                        </thead>
+                        <tbody id="glic-tbody"></tbody>
+                    </table>
+                    <button class="btn btn-primary" style="margin-top:12px;" onclick="addGlicRow()">+ Adicionar
+                        Medição</button>
+                </div>
+            </div>
+
+            <!-- TAB: GANHOS -->
+            <div class="tab-content" id="tab-ganhos">
+                <div class="section-card">
+                    <h3>💧 Líquidos Infundidos (Ganhos)</h3>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Inclua soros, medicamentos IV,
+                        dieta enteral, hemoderivados, etc.</p>
+                    <div class="sv-table-wrapper">
+                        <table class="sv-table" id="ganhos-table">
+                            <thead id="ganhos-thead">
+                                <!-- Colunas de horas geradas via JS -->
+                            </thead>
+                            <tbody id="ganhos-tbody"></tbody>
+                        </table>
+                    </div>
+
+                    <!-- Datalist para drogas UTI -->
+                    <datalist id="drogas-uti">
+                        <option value="Noradrenalina">
+                        <option value="Vasopressina">
+                        <option value="Adrenalina">
+                        <option value="Dobutamina">
+                        <option value="Milrinone">
+                        <option value="Precedex (Dexmedetomidina)">
+                        <option value="Propofol 1%">
+                        <option value="Propofol 2%">
+                        <option value="Midazolam">
+                        <option value="Fentanil">
+                        <option value="Ketamina">
+                        <option value="Nipride (Nitroprussiato)">
+                        <option value="Tridil (Nitroglicerina)">
+                        <option value="SF 0,9%">
+                        <option value="Ringer Lactato">
+                        <option value="Soro Glicosado 5%">
+                        <option value="Albumina">
+                        <option value="Meropenem">
+                        <option value="Piperacilina/Tazobactam (Tazocin)">
+                        <option value="Polimixina B">
+                        <option value="Vancomicina">
+                        <option value="Dieta Enteral">
+                        <option value="Água (SNE)">
+                    </datalist>
+                    <button class="btn btn-primary" style="margin-top:12px;" onclick="addGanhoRow()">+ Adicionar
+                        Item</button>
+                    <div class="bal-total" id="ganhos-total">Total Ganhos: 0 mL</div>
+                </div>
+            </div>
+
+            <!-- TAB: PERDAS -->
+            <div class="tab-content" id="tab-perdas">
+                <!-- DIURESE -->
+                <div class="section-card">
+                    <h3>🚿 Diurese</h3>
+                    <table class="sv-table" id="diurese-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Volume (mL)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="diurese-tbody"></tbody>
+                    </table>
+                    <button class="btn btn-primary" style="margin-top:8px;" onclick="addDiureseRow()">+
+                        Adicionar</button>
+                    <div class="bal-total" id="diurese-total">Total Diurese: 0 mL</div>
+                </div>
+
+                <!-- EVACUAÇÕES -->
+                <div class="section-card">
+                    <h3>🔄 Evacuações</h3>
+                    <table class="sv-table" id="evac-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Tipo / Obs</th>
+                            </tr>
+                        </thead>
+                        <tbody id="evac-tbody"></tbody>
+                    </table>
+                    <button class="btn btn-primary" style="margin-top:8px;" onclick="addEvacRow()">+ Adicionar</button>
+                </div>
+
+                <!-- DRENOS -->
+                <div class="section-card">
+                    <h3>🩹 Drenos</h3>
+                    <table class="sv-table" id="dreno-table">
+                        <thead>
+                            <tr>
+                                <th>Dreno</th>
+                                <th>Volume (mL)</th>
+                                <th>Aspecto</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="dreno-tbody"></tbody>
+                    </table>
+                    <button class="btn btn-primary" style="margin-top:8px;" onclick="addDrenoRow()">+ Adicionar
+                        Dreno</button>
+                    <div class="bal-total" id="dreno-total">Total Drenos: 0 mL</div>
+                </div>
+
+                <!-- HEMODIÁLISE -->
+                <div class="section-card">
+                    <h3>🫧 Hemodiálise</h3>
+                    <div class="row">
+                        <div class="field-group">
+                            <label>UF Programada (mL)</label>
+                            <input type="number" id="hd-uf-prog" oninput="updateHD()" placeholder="0">
+                        </div>
+                        <div class="field-group">
+                            <label>UF Real (mL)</label>
+                            <input type="number" id="hd-uf-real" oninput="updateHD()" placeholder="0">
+                        </div>
+                        <div class="field-group">
+                            <label>Duração (h)</label>
+                            <input type="number" id="hd-duracao" oninput="updateHD()" placeholder="0">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bal-total" id="perdas-total" style="font-size:16px;font-weight:700;">Total Perdas: 0 mL
+                </div>
+            </div>
+
+            <!-- TAB: RESUMO -->
+            <div class="tab-content" id="tab-resumo">
+                <div class="section-card">
+                    <h3>📊 Balanço Hídrico</h3>
+                    <div class="bh-summary" id="bh-summary">
+                        <div class="bh-row">
+                            <span class="bh-label">Total Ganhos</span>
+                            <span class="bh-value" id="bh-ganhos">0 mL</span>
+                        </div>
+                        <div class="bh-row">
+                            <span class="bh-label">Total Perdas</span>
+                            <span class="bh-value" id="bh-perdas">0 mL</span>
+                        </div>
+                        <div class="bh-row bh-result">
+                            <span class="bh-label">BALANÇO HÍDRICO</span>
+                            <span class="bh-value" id="bh-result">0 mL</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="section-card">
+                    <h3>📋 Resumo Clínico (automático)</h3>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">
+                        Gerado automaticamente a partir dos dados lançados. Este resumo aparecerá no Passômetro médico.
+                    </p>
+                    <div class="resumo-badges" id="resumo-badges"></div>
+                </div>
+            </div>
+
+        </div><!-- /view-balance -->
+
+        <!-- PRINT CONTAINER -->
+        <div id="print-container" style="display:none;"></div>
+
+    </div><!-- /app-container -->
+
+    <!-- SAVE INDICATOR -->
+    <div id="save-indicator" class="save-indicator no-print"></div>
+
+    <!-- APP LOGIC -->
+    <script src="enfermagem.js"></script>
+
+    <!-- FIREBASE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDoeVKrSwyWluQHSWlN4k7LWHbTMymTyzk",
+            authDomain: "passometro-562bd.firebaseapp.com",
+            projectId: "passometro-562bd",
+            storageBucket: "passometro-562bd.firebasestorage.app",
+            messagingSenderId: "617937355734",
+            appId: "1:617937355734:web:a02eaaae7febf12e159a77"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.firebaseDb = db;
+        window.firebaseAuth = auth;
+        window.firebaseAuthModule = { signOut };
+        window.firebaseFirestore = { doc, setDoc, getDoc };
+
+        const loginScreen = document.getElementById('login-screen');
+        const appContainer = document.getElementById('app-container');
+        const btnLogin = document.getElementById('btn-login');
+        const loginError = document.getElementById('login-error');
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                loginScreen.style.display = 'none';
+                appContainer.style.display = 'block';
+                if (window.startApp) window.startApp();
+            } else {
+                loginScreen.style.display = 'flex';
+                appContainer.style.display = 'none';
+            }
+        });
+
+        btnLogin.addEventListener('click', () => {
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            loginError.style.display = 'none';
+            signInWithEmailAndPassword(auth, email, password)
+                .catch(() => { loginError.style.display = 'block'; });
+        });
+
+        document.getElementById('login-password').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') btnLogin.click();
+        });
+    </script>
+
+</body>
+
+</html>

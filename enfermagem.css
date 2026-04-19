@@ -1,0 +1,363 @@
+/* ===== NURSING BALANCE – SPECIFIC STYLES ===== */
+/* Extends style.css with nursing-specific components */
+
+/* ===== BALANCE HEADER ===== */
+.balance-header {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 20px 24px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.balance-header h2 {
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--accent);
+    margin: 0;
+}
+
+.bal-patient-label {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.bal-shift-selector {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-secondary);
+}
+
+.bal-shift-selector select,
+.bal-shift-selector input {
+    padding: 6px 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+}
+
+/* ===== VITAL SIGNS TABLE ===== */
+.sv-table-wrapper {
+    overflow-x: auto;
+}
+
+.sv-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+
+.sv-table th {
+    text-align: left;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 8px 6px;
+    border-bottom: 2px solid var(--border);
+    white-space: nowrap;
+}
+
+.sv-table td {
+    padding: 4px 4px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+}
+
+.sv-table input {
+    width: 100%;
+    padding: 6px 8px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    transition: var(--transition);
+}
+
+.sv-table input:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.sv-table input[type="number"] {
+    width: 70px;
+}
+
+.sv-table input[type="time"] {
+    width: 100px;
+}
+
+.sv-hour {
+    font-weight: 700;
+    color: var(--accent);
+    white-space: nowrap;
+    width: 60px;
+}
+
+/* ===== ROW DELETE BUTTON ===== */
+.row-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 14px;
+    padding: 2px 6px;
+    transition: var(--transition);
+    margin-left: 4px;
+}
+
+.row-delete:hover {
+    color: var(--danger);
+}
+
+/* ===== BALANCE TOTAL ===== */
+.bal-total {
+    margin-top: 12px;
+    padding: 10px 16px;
+    background: rgba(13, 91, 143, 0.06);
+    border: 1px solid rgba(13, 91, 143, 0.15);
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--accent);
+}
+
+/* ===== BH SUMMARY ===== */
+.bh-summary {
+    background: var(--bg-input);
+    border-radius: var(--radius);
+    padding: 20px;
+}
+
+.bh-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.bh-row:last-child {
+    border-bottom: none;
+}
+
+.bh-row.bh-result {
+    border-top: 2px solid var(--accent);
+    border-bottom: none;
+    padding-top: 16px;
+    margin-top: 8px;
+}
+
+.bh-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.bh-row.bh-result .bh-label {
+    font-size: 16px;
+    font-weight: 800;
+    color: var(--text-primary);
+}
+
+.bh-value {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.bh-row.bh-result .bh-value {
+    font-size: 24px;
+    font-weight: 900;
+}
+
+.bh-positive {
+    color: var(--accent);
+}
+
+.bh-negative {
+    color: var(--danger);
+}
+
+/* ===== RESUMO BADGES ===== */
+.resumo-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.resumo-badge {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 20px;
+}
+
+.resumo-success {
+    background: var(--success-bg);
+    color: var(--success);
+    border: 1px solid rgba(22, 163, 74, 0.2);
+}
+
+.resumo-warning {
+    background: var(--warning-bg);
+    color: var(--warning);
+    border: 1px solid rgba(217, 119, 6, 0.2);
+}
+
+.resumo-danger {
+    background: var(--danger-bg);
+    color: var(--danger);
+    border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+.resumo-info {
+    background: rgba(13, 91, 143, 0.08);
+    color: var(--accent);
+    border: 1px solid rgba(13, 91, 143, 0.2);
+}
+
+/* ===== PRINT – BALANÇO ===== */
+@media print {
+    body * {
+        visibility: hidden;
+    }
+
+    #print-container,
+    #print-container * {
+        visibility: visible;
+    }
+
+    #print-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+    }
+
+    .print-balanco {
+        font-family: 'Inter', sans-serif;
+        color: #000;
+        font-size: 11px;
+        padding: 10mm;
+    }
+
+    .print-bal-header {
+        text-align: center;
+        margin-bottom: 16px;
+        border-bottom: 2px solid #000;
+        padding-bottom: 12px;
+    }
+
+    .print-bal-header h2 {
+        font-size: 16px;
+        margin-bottom: 6px;
+    }
+
+    .print-bal-info {
+        display: flex;
+        justify-content: space-between;
+        font-size: 12px;
+        color: #333;
+    }
+
+    .print-balanco h4 {
+        font-size: 12px;
+        font-weight: 700;
+        margin: 14px 0 6px;
+        border-bottom: 1px solid #999;
+        padding-bottom: 3px;
+    }
+
+    .print-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+        font-size: 10px;
+    }
+
+    .print-table th {
+        background: #f0f0f0;
+        font-weight: 700;
+        font-size: 9px;
+        text-transform: uppercase;
+        text-align: left;
+        padding: 4px 6px;
+        border: 1px solid #ccc;
+    }
+
+    .print-table td {
+        padding: 3px 6px;
+        border: 1px solid #ccc;
+    }
+
+    .print-total td {
+        background: #f0f0f0;
+        font-weight: 700;
+    }
+
+    .print-2col {
+        display: flex;
+        gap: 16px;
+    }
+
+    .print-col {
+        flex: 1;
+    }
+
+    .print-bh-result {
+        text-align: center;
+        font-size: 16px;
+        margin: 16px 0;
+        padding: 10px;
+        border: 2px solid #000;
+        border-radius: 6px;
+        background: #f5f5f5;
+    }
+
+    .print-signature {
+        margin-top: 30px;
+        border-top: 1px solid #999;
+        padding-top: 16px;
+    }
+
+    .print-sig-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 11px;
+    }
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .balance-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .bal-shift-selector {
+        margin-left: 0;
+        flex-wrap: wrap;
+    }
+
+    .sv-table input[type="number"] {
+        width: 55px;
+    }
+}
