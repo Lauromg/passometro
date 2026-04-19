@@ -974,7 +974,7 @@ function renderExames(bed) {
     sortedExams.forEach((exam, cIdx) => {
       const origIdx = bed.exams.findIndex(e => e === exam);
       html += `<td style="padding:6px; border-right:1px solid var(--border);">`;
-      html += `<input type="text" value="${escapeAttr(exam[f.id] || '')}" onchange="updateExam(${origIdx},'${f.id}',this.value)" class="exam-value-input" data-row="${rIndex}" data-col="${cIdx}" onkeydown="handleExamKeydown(event, this)" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
+      html += `<input type="text" value="${escapeAttr(exam[f.id] || '')}" onchange="updateExam(${origIdx},'${f.id}',this.value)" class="exam-value-input" data-row="${rIndex}" data-col="${cIdx}" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
       html += `</td>`;
     });
     html += `<td></td></tr>`;
@@ -994,7 +994,7 @@ function renderExames(bed) {
     sortedExams.forEach((exam, cIdx) => {
       const origIdx = bed.exams.findIndex(e => e === exam);
       html += `<td style="padding:6px; border-right:1px solid var(--border);">`;
-      html += `<input type="text" value="${escapeAttr(exam[cExam.id] || '')}" onchange="updateExam(${origIdx},'${cExam.id}',this.value)" class="exam-value-input" data-row="${rIndex}" data-col="${cIdx}" onkeydown="handleExamKeydown(event, this)" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
+      html += `<input type="text" value="${escapeAttr(exam[cExam.id] || '')}" onchange="updateExam(${origIdx},'${cExam.id}',this.value)" class="exam-value-input" data-row="${rIndex}" data-col="${cIdx}" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
       html += `</td>`;
     });
     html += `<td></td></tr>`;
@@ -1010,6 +1010,9 @@ function renderExames(bed) {
 
     container.innerHTML = html;
 
+    // Setup vertical navigation for exam inputs
+    setupExamNavigation(container);
+
     // Render charts
     renderExamCharts(bed);
   } catch (e) {
@@ -1018,22 +1021,30 @@ function renderExames(bed) {
   }
 }
 
-function handleExamKeydown(e, input) {
-  if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault();
-    const r = parseInt(input.dataset.row);
-    const c = parseInt(input.dataset.col);
-    const isShift = e.shiftKey;
-
-    const nextRow = isShift ? (r - 1) : (r + 1);
-    const nextInput = document.querySelector(`.exam-value-input[data-row="${nextRow}"][data-col="${c}"]`);
-
-    if (nextInput) {
-      nextInput.focus();
-      nextInput.select();
+function setupExamNavigation(container) {
+  container.addEventListener('keydown', function(e) {
+    const input = e.target;
+    if (!input.classList.contains('exam-value-input')) return;
+    
+    if (e.key === 'Tab' || e.key === 'Enter') {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Dispara o onchange manualmente para salvar o valor atual
+      input.dispatchEvent(new Event('change'));
+      
+      const r = parseInt(input.dataset.row);
+      const c = parseInt(input.dataset.col);
+      const nextRow = e.shiftKey ? (r - 1) : (r + 1);
+      
+      const nextInput = container.querySelector(`.exam-value-input[data-row="${nextRow}"][data-col="${c}"]`);
+      if (nextInput) {
+        nextInput.focus();
+        nextInput.select();
+      }
+      // Se não encontrar próxima linha, permanece no campo atual (sem mudar de coluna)
     }
-    // Se não encontrar próxima linha, permanece no campo atual (sem mudar de coluna)
-  }
+  }, true); // 'true' = capturing phase, intercepta ANTES do comportamento padrão do Tab
 }
 
 function parseTextExams() {
