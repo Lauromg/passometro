@@ -1024,29 +1024,15 @@ function handleExamKeydown(e, input) {
     const r = parseInt(input.dataset.row);
     const c = parseInt(input.dataset.col);
     const isShift = e.shiftKey;
-    
+
     const nextRow = isShift ? (r - 1) : (r + 1);
-    let nextInput = document.querySelector(`.exam-value-input[data-row="${nextRow}"][data-col="${c}"]`);
-    
+    const nextInput = document.querySelector(`.exam-value-input[data-row="${nextRow}"][data-col="${c}"]`);
+
     if (nextInput) {
       nextInput.focus();
       nextInput.select();
-    } else {
-      if (!isShift && (e.key === 'Tab' || e.key === 'Enter')) {
-        let nextColStart = document.querySelector(`.exam-value-input[data-row="0"][data-col="${c+1}"]`);
-        if (nextColStart) {
-          nextColStart.focus();
-          nextColStart.select();
-        }
-      } else if (isShift && (e.key === 'Tab' || e.key === 'Enter')) {
-        let prevColInputs = document.querySelectorAll(`.exam-value-input[data-col="${c-1}"]`);
-        if (prevColInputs.length > 0) {
-          let lastPrevColInput = prevColInputs[prevColInputs.length - 1];
-          lastPrevColInput.focus();
-          lastPrevColInput.select();
-        }
-      }
     }
+    // Se não encontrar próxima linha, permanece no campo atual (sem mudar de coluna)
   }
 }
 
