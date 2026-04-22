@@ -699,10 +699,13 @@ function renderEvolucao(bed) {
     <div class="evolution-item">
       <button class="evo-delete" onclick="deleteEvolution(${bed.evolutions.indexOf(evo)})" title="Excluir">✕</button>
       <div class="evo-header">
-        <span class="${evo.shift === 'day' ? 'evo-badge-day' : 'evo-badge-night'}">
-          ${evo.shift === 'day' ? '☀️ Diurno' : '🌙 Noturno'}
-        </span>
-        <span class="evo-date">${evo.date}</span>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span class="${evo.shift === 'day' ? 'evo-badge-day' : 'evo-badge-night'}">
+            ${evo.shift === 'day' ? '☀️ Diurno' : '🌙 Noturno'}
+          </span>
+          <span class="evo-date">${evo.date}</span>
+        </div>
+        <button class="btn btn-sm" style="font-size:11px; padding:3px 8px; margin-right: 25px; border:1px solid var(--border); border-radius:4px; background:var(--bg-card); color:var(--text-primary); cursor:pointer;" onclick="copyEvolutionFormat(${bed.evolutions.indexOf(evo)})">📋 Copiar Evolução</button>
       </div>
       <div class="evo-text">${escapeHTML(evo.text)}</div>
     </div>
@@ -734,6 +737,41 @@ function deleteEvolution(idx) {
   bed.evolutions.splice(idx, 1);
   renderEvolucao(bed);
   triggerSave();
+}
+
+async function copyEvolutionFormat(idx) {
+  const bed = state.beds[state.currentBed];
+  if (!bed || !bed.evolutions || !bed.evolutions[idx]) return;
+  const evo = bed.evolutions[idx];
+  
+  const shiftName = evo.shift === 'day' ? 'diurno' : 'noturno';
+  let formattedText = `# Evolução do plantão ${shiftName}\n`;
+  if (evo.date) formattedText += `Data: ${evo.date}\n\n`;
+
+  // Diagnósticos
+  if (bed.diagnosticos && bed.diagnosticos.trim()) {
+    formattedText += `Lista de Diagnósticos:\n${bed.diagnosticos.trim()}\n\n`;
+  }
+  
+  // HMA e HPP
+  if (bed.hma && bed.hma.trim()) {
+    formattedText += `HMA:\n${bed.hma.trim()}\n\n`;
+  }
+  
+  if (bed.hpp && bed.hpp.trim()) {
+    formattedText += `HPP:\n${bed.hpp.trim()}\n\n`;
+  }
+  
+  // Evolução do plantão
+  formattedText += `# Avaliação Diária\n${evo.text.trim()}\n`;
+
+  try {
+    await navigator.clipboard.writeText(formattedText);
+    showSaveIndicator('saved', '✓ Evolução copiada!');
+  } catch (err) {
+    console.error('Falha ao copiar texto: ', err);
+    alert('Não foi possível copiar a evolução.');
+  }
 }
 
 async function inserirBalancoNaEvolucao() {
