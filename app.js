@@ -20,11 +20,29 @@ const DEVICES_LIST = [
   { id: 'midazolam', name: 'Midazolam', detailLabel: 'ml/h' },
   { id: 'fentanil', name: 'Fentanil', detailLabel: 'ml/h' },
   { id: 'propofol', name: 'Propofol', detailLabel: 'ml/h' },
+  { id: 'ketamina', name: 'Ketamina', detailLabel: 'ml/h' },
+  { id: 'adrenalina', name: 'Adrenalina', detailLabel: 'ml/h' },
+  { id: 'nipride', name: 'Nitroprussiato (Nipride)', detailLabel: 'ml/h' },
+  { id: 'amiodarona', name: 'Amiodarona', detailLabel: 'ml/h' },
   { id: 'vm', name: 'Ventilação Mecânica', detailLabel: 'Modo / Parâmetros' },
   { id: 'vni', name: 'VNI (Ventilação Não Invasiva)', detailLabel: 'Modo / Parâmetros' },
   { id: 'o2', name: 'O₂ Suplementar', detailLabel: 'Litros/min / Dispositivo' },
   { id: 'dialise', name: 'Diálise', detailLabel: 'Tipo / Detalhes' },
 ];
+
+const DRUG_SOLUTIONS = {
+  'nora': { name: 'Noradrenalina', options: [{ label: 'Padrão (5 amp - 20mg/200mL)', concMcgMl: 100 }, { label: 'Dobrada (10 amp - 40mg/200mL)', concMcgMl: 200 }], calcType: 'mcg/kg/min' },
+  'adrenalina': { name: 'Adrenalina', options: [{ label: 'Padrão (20 amp - 20mg/200mL)', concMcgMl: 100 }], calcType: 'mcg/kg/min' },
+  'dobuta': { name: 'Dobutamina', options: [{ label: 'Padrão (1 amp - 250mg/250mL)', concMcgMl: 1000 }, { label: 'Dobrada (2 amp - 500mg/250mL)', concMcgMl: 2000 }], calcType: 'mcg/kg/min' },
+  'dopa': { name: 'Dopamina', options: [{ label: 'Padrão (5 amp - 250mg/250mL)', concMcgMl: 1000 }], calcType: 'mcg/kg/min' },
+  'nitro': { name: 'Nitroglicerina (Tridil)', options: [{ label: 'Padrão (1 fr - 50mg/250mL)', concMcgMl: 200 }], calcType: 'mcg/min' },
+  'nipride': { name: 'Nitroprussiato (Nipride)', options: [{ label: 'Padrão (1 fr - 50mg/250mL)', concMcgMl: 200 }], calcType: 'mcg/kg/min' },
+  'fentanil': { name: 'Fentanil', options: [{ label: 'Padrão (4 fr - 2000mcg/200mL)', concMcgMl: 10 }], calcType: 'mcg/kg/min' },
+  'midazolam': { name: 'Midazolam', options: [{ label: 'Padrão (4 amp - 200mg/200mL)', concMcgMl: 1000 }], calcType: 'mg/kg/h' },
+  'propofol': { name: 'Propofol', options: [{ label: 'Puro 1% (10mg/mL)', concMcgMl: 10000 }, { label: 'Puro 2% (20mg/mL)', concMcgMl: 20000 }], calcType: 'mg/kg/h' },
+  'ketamina': { name: 'Ketamina', options: [{ label: 'Padrão (4 fr - 2000mg/200mL)', concMcgMl: 10000 }], calcType: 'mg/kg/h' },
+  'amiodarona': { name: 'Amiodarona', options: [{ label: 'Manutenção (6 amp - 900mg/238mL)', concMcgMl: 3781.5 }], calcType: 'mg/min' }
+};
 
 const EXAM_FIELDS = [
   // Hemograma
@@ -504,6 +522,7 @@ function renderPatientView() {
   document.getElementById('patient-bed-number').textContent = `Leito ${bed.number}`;
   document.getElementById('patient-name').value = bed.name || '';
   document.getElementById('patient-age').value = bed.age || '';
+  document.getElementById('patient-weight').value = bed.peso || '';
   document.getElementById('patient-plan').value = bed.plan || '';
   document.getElementById('patient-data-internacao').value = bed.dataInternacao || '';
 
@@ -989,30 +1008,298 @@ function deleteAtb(idx) {
   triggerSave();
 }
 
+function getActiveDrugsFromBalanco(bedIdx) {
+  const active = {};
+  const todayISO = formatDateISO(new Date());
+  const shifts = ['diurno', 'noturno'];
+  
+  const aliases = {
+    'noradrenalina': 'nora',
+    'adrenalina': 'adrenalina',
+    'dobutamina': 'dobuta',
+    'dopamina': 'dopa',
+    'nitroglicerina': 'nitro',
+    'tridil': 'nitro',
+    'nitroprussiato': 'nipride',
+    'nipride': 'nipride',
+    'fentanil': 'fentanil',
+    'midazolam': 'midazolam',
+    'propofol': 'propofol',
+    'ketamina': 'ketamina',
+    'vasopressina': 'vasopressina',
+    'amiodarona': 'amiodarona'
+  };
+
+  shifts.forEach(shift => {
+    const key = `${bedIdx}_${todayISO}_${shift}`;
+    const data = balancoData[key];
+    if (data && data.ganhos) {
+      data.ganhos.forEach(g => {
+        if (!g.descricao) return;
+        const descLower = g.descricao.toLowerCase();
+        
+        let foundId = null;
+        for (const [alias, id] of Object.entries(aliases)) {
+          if (descLower.includes(alias)) {
+            foundId = id;
+            break;
+          }
+        }
+        
+        if (foundId) {
+          let lastRate = 0;
+          if (g.volumes) {
+             const hours = Object.keys(g.volumes).sort((a,b) => parseInt(a) - parseInt(b));
+             for (let h of hours) {
+                if (g.volumes[h] !== null && g.volumes[h] !== '') {
+                   lastRate = parseFloat(g.volumes[h]) || 0;
+                }
+             }
+          }
+          if (lastRate > 0) {
+             active[foundId] = lastRate;
+          }
+        }
+      });
+    }
+  });
+  return active;
+}
+
 function renderDispositivos(bed) {
   const container = document.getElementById('devices-grid');
   if (!container) return;
   if (!bed.devices) bed.devices = {};
+  
+  const bedIdx = state.currentBed;
+  const importedDrugs = getActiveDrugsFromBalanco(bedIdx);
+  const peso = parseFloat(bed.peso) || 0;
 
   container.innerHTML = DEVICES_LIST.map(d => {
-    const dev = bed.devices[d.id] || { active: false, detail: '' };
+    const isImported = importedDrugs.hasOwnProperty(d.id);
+    const importedRate = isImported ? importedDrugs[d.id] : null;
+    
+    let dev = bed.devices[d.id] || { active: false, detail: '', calc: null };
+    if (isImported) {
+      dev.active = true;
+    }
+
+    const isDrug = DRUG_SOLUTIONS.hasOwnProperty(d.id);
+    const drugInfo = isDrug ? DRUG_SOLUTIONS[d.id] : null;
+
+    let calcHtml = '';
+    if (isDrug && dev.active) {
+      if (!dev.calc) dev.calc = { type: '0', customConc: 0 };
+      
+      const optionsHtml = drugInfo.options.map((opt, i) => 
+        `<option value="${i}" ${dev.calc.type === String(i) ? 'selected' : ''}>${opt.label}</option>`
+      ).join('');
+      
+      let currentConc = 0;
+      if (dev.calc.type === 'custom') {
+         currentConc = parseFloat(dev.calc.customConc) || 0;
+      } else {
+         const optIdx = parseInt(dev.calc.type) || 0;
+         if (drugInfo.options[optIdx]) currentConc = drugInfo.options[optIdx].concMcgMl;
+      }
+      
+      const rateMlH = isImported ? importedRate : (parseFloat(dev.detail.replace(',','.')) || 0);
+      
+      let doseStr = '-';
+      if (rateMlH > 0 && currentConc > 0) {
+        if (drugInfo.calcType === 'mcg/kg/min') {
+           if (peso > 0) doseStr = `${((rateMlH * currentConc) / (peso * 60)).toFixed(2)} mcg/kg/min`;
+           else doseStr = `Peso ind.`;
+        } else if (drugInfo.calcType === 'mcg/min') {
+           doseStr = `${((rateMlH * currentConc) / 60).toFixed(1)} mcg/min`;
+        } else if (drugInfo.calcType === 'mg/kg/h') {
+           if (peso > 0) doseStr = `${((rateMlH * (currentConc / 1000)) / peso).toFixed(2)} mg/kg/h`;
+           else doseStr = `Peso ind.`;
+        } else if (drugInfo.calcType === 'mg/min') {
+           doseStr = `${((rateMlH * (currentConc / 1000)) / 60).toFixed(2)} mg/min`;
+        }
+      }
+
+      calcHtml = `
+        <div class="drug-calc-box" style="margin-top:8px; padding:8px; background:var(--bg-input); border-radius:4px; border:1px solid var(--border); font-size:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+             <span style="font-weight:600; color:var(--text-secondary);">Solução:</span>
+             <select onchange="updateDrugCalc('${d.id}', 'type', this.value)" style="font-size:11px; padding:2px; border:1px solid var(--border); border-radius:4px;">
+                ${optionsHtml}
+                <option value="custom" ${dev.calc.type === 'custom' ? 'selected' : ''}>Personalizada...</option>
+             </select>
+          </div>
+          ${dev.calc.type === 'custom' ? `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+               <span style="color:var(--text-muted);">Conc (mcg/mL):</span>
+               <input type="number" value="${dev.calc.customConc}" onchange="updateDrugCalc('${d.id}', 'customConc', this.value)" style="width:70px; padding:2px 4px; font-size:11px;">
+            </div>
+          ` : ''}
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:4px;">
+             <span style="color:var(--text-primary);">Dose atual:</span>
+             <span style="font-weight:700; color:var(--accent);">${doseStr}</span>
+          </div>
+          <div style="margin-top:6px; text-align:right;">
+             <button onclick="openDrugCalculator('${d.id}')" style="font-size:11px; padding:4px 8px; background:var(--bg-card); border:1px solid var(--accent); color:var(--accent); border-radius:4px; cursor:pointer;">🧮 Calculadora</button>
+          </div>
+        </div>
+      `;
+    }
+
     return `
-      <div class="device-card ${dev.active ? 'active' : ''}">
+      <div class="device-card ${dev.active ? 'active' : ''} ${isImported ? 'imported-device' : ''}" style="${isImported ? 'border: 1px dashed var(--accent);' : ''}">
         <div class="device-card-header">
           <button class="device-toggle ${dev.active ? 'on' : ''}" 
-                  onclick="toggleDevice('${d.id}')"></button>
-          <span class="device-name">${d.name}</span>
+                  onclick="${isImported ? `alert('Droga ativa no balanço hídrico. Para desligar, pare no balanço ou aguarde atualização.')` : `toggleDevice('${d.id}')`}"></button>
+          <span class="device-name">${d.name} ${isImported ? '<span style="font-size:10px;color:var(--accent);margin-left:4px;">(Balanço)</span>' : ''}</span>
         </div>
         ${dev.active ? `
           <div class="device-detail">
-            <input type="text" value="${escapeAttr(dev.detail)}" 
-                   onchange="updateDeviceDetail('${d.id}', this.value)"
-                   placeholder="${d.detailLabel}">
+            ${isImported ? `
+              <div style="padding:4px 0; font-size:13px; font-weight:600; color:var(--text-primary);">Vazão Atual: ${importedRate} ml/h</div>
+            ` : `
+              <input type="text" value="${escapeAttr(dev.detail)}" 
+                     onchange="updateDeviceDetail('${d.id}', this.value)"
+                     placeholder="${d.detailLabel}">
+            `}
           </div>
+          ${calcHtml}
         ` : ''}
       </div>
     `;
   }).join('');
+}
+
+function updateDrugCalc(deviceId, field, value) {
+  const bed = state.beds[state.currentBed];
+  if (!bed || !bed.devices || !bed.devices[deviceId]) return;
+  if (!bed.devices[deviceId].calc) bed.devices[deviceId].calc = { type: '0', customConc: 0 };
+  bed.devices[deviceId].calc[field] = value;
+  triggerSave();
+  renderDispositivos(bed);
+}
+
+function openDrugCalculator(deviceId) {
+  const bed = state.beds[state.currentBed];
+  if (!bed || !DRUG_SOLUTIONS[deviceId]) return;
+  const drugInfo = DRUG_SOLUTIONS[deviceId];
+  const dev = bed.devices[deviceId];
+  
+  if (!dev || !dev.calc) return;
+  
+  let currentConc = 0;
+  if (dev.calc.type === 'custom') {
+     currentConc = parseFloat(dev.calc.customConc) || 0;
+  } else {
+     const optIdx = parseInt(dev.calc.type) || 0;
+     if (drugInfo.options[optIdx]) currentConc = drugInfo.options[optIdx].concMcgMl;
+  }
+  
+  if (currentConc <= 0) {
+     alert('Defina a concentração da solução (ou escolha uma padrão) para usar a calculadora.');
+     return;
+  }
+  
+  const peso = parseFloat(bed.peso) || 0;
+  if (peso <= 0 && (drugInfo.calcType.includes('/kg/'))) {
+     alert('Preencha o peso do paciente no cabeçalho para calcular essa droga.');
+     return;
+  }
+
+  state.activeCalc = {
+     deviceId,
+     drugInfo,
+     concMcgMl: currentConc,
+     peso
+  };
+  
+  document.getElementById('calc-modal-title').textContent = `Calculadora: ${drugInfo.name}`;
+  document.getElementById('calc-label-dose').textContent = drugInfo.calcType;
+  document.getElementById('calc-input-dose').value = '';
+  document.getElementById('calc-input-mlh').value = '';
+  document.getElementById('calc-result-mlh').textContent = '-- ml/h';
+  document.getElementById('calc-result-dose').textContent = '-- ' + drugInfo.calcType;
+  
+  document.getElementById('drug-calc-modal').style.display = 'flex';
+}
+
+function calculateDrugFromDose() {
+  if (!state.activeCalc) return;
+  const dose = parseFloat(document.getElementById('calc-input-dose').value.replace(',','.'));
+  if (isNaN(dose) || dose <= 0) {
+     document.getElementById('calc-result-mlh').textContent = '-- ml/h';
+     return;
+  }
+  
+  const { drugInfo, concMcgMl, peso } = state.activeCalc;
+  let mlh = 0;
+  
+  // dose = (mlh * conc) / (peso * 60) -> mlh = (dose * peso * 60) / conc
+  if (drugInfo.calcType === 'mcg/kg/min') {
+     mlh = (dose * peso * 60) / concMcgMl;
+  } else if (drugInfo.calcType === 'mcg/min') {
+     mlh = (dose * 60) / concMcgMl;
+  } else if (drugInfo.calcType === 'mg/kg/h') {
+     // dose = (mlh * (conc/1000)) / peso -> mlh = (dose * peso) / (conc/1000)
+     mlh = (dose * peso) / (concMcgMl / 1000);
+  } else if (drugInfo.calcType === 'mg/min') {
+     mlh = (dose * 60) / (concMcgMl / 1000);
+  }
+  
+  document.getElementById('calc-result-mlh').textContent = `${mlh.toFixed(1)} ml/h`;
+}
+
+function calculateDrugFromMlh() {
+  if (!state.activeCalc) return;
+  const mlh = parseFloat(document.getElementById('calc-input-mlh').value.replace(',','.'));
+  if (isNaN(mlh) || mlh <= 0) {
+     document.getElementById('calc-result-dose').textContent = '-- ' + state.activeCalc.drugInfo.calcType;
+     return;
+  }
+  
+  const { drugInfo, concMcgMl, peso } = state.activeCalc;
+  let dose = 0;
+  
+  if (drugInfo.calcType === 'mcg/kg/min') {
+     dose = (mlh * concMcgMl) / (peso * 60);
+  } else if (drugInfo.calcType === 'mcg/min') {
+     dose = (mlh * concMcgMl) / 60;
+  } else if (drugInfo.calcType === 'mg/kg/h') {
+     dose = (mlh * (concMcgMl / 1000)) / peso;
+  } else if (drugInfo.calcType === 'mg/min') {
+     dose = (mlh * (concMcgMl / 1000)) / 60;
+  }
+  
+  let doseStr = drugInfo.calcType.includes('/min') && drugInfo.calcType.includes('mg') ? dose.toFixed(2) : dose.toFixed(2);
+  if (drugInfo.calcType === 'mcg/min') doseStr = dose.toFixed(1);
+  
+  document.getElementById('calc-result-dose').textContent = `${doseStr} ${drugInfo.calcType}`;
+}
+
+function applyDrugMlh() {
+  if (!state.activeCalc) return;
+  
+  const mlhNode = document.getElementById('calc-result-mlh').textContent;
+  const inputMlh = document.getElementById('calc-input-mlh').value;
+  
+  let finalMlh = '';
+  if (mlhNode && mlhNode !== '-- ml/h') {
+     finalMlh = mlhNode.replace(' ml/h', '');
+  } else if (inputMlh && parseFloat(inputMlh) > 0) {
+     finalMlh = inputMlh;
+  }
+  
+  if (finalMlh) {
+     const bedIdx = state.currentBed;
+     const importedDrugs = getActiveDrugsFromBalanco(bedIdx);
+     if (importedDrugs.hasOwnProperty(state.activeCalc.deviceId)) {
+        alert('Atenção: A vazão foi calculada (' + finalMlh + ' ml/h). Ajuste a bomba física. Como este dado é importado do balanço, ele atualizará no passômetro apenas após o lançamento da enfermagem.');
+     } else {
+        updateDeviceDetail(state.activeCalc.deviceId, finalMlh);
+     }
+  }
+  
+  document.getElementById('drug-calc-modal').style.display = 'none';
 }
 
 function toggleDevice(deviceId) {

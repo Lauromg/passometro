@@ -75,6 +75,11 @@
                         oninput="updatePatientField('age', this.value)">
                 </div>
                 <div class="field-group small">
+                    <label>Peso (kg)</label>
+                    <input type="number" id="patient-weight" placeholder="kg" min="0" max="300" step="0.1"
+                        oninput="updatePatientField('peso', this.value)">
+                </div>
+                <div class="field-group small">
                     <label>Plano de Saúde</label>
                     <select id="patient-plan" onchange="updatePatientField('plan', this.value)">
                         <option value="">Selecione...</option>
@@ -263,6 +268,45 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
 
     <!-- SAVE INDICATOR -->
     <div id="save-indicator" class="save-indicator no-print"></div>
+
+    <!-- DRUG CALCULATOR MODAL -->
+    <div id="drug-calc-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:var(--bg-card); padding:24px; border-radius:12px; width:90%; max-width:400px; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 id="calc-modal-title" style="margin:0; font-size:18px;">Calculadora de Dose</h3>
+                <button onclick="document.getElementById('drug-calc-modal').style.display='none'" style="background:none; border:none; font-size:20px; cursor:pointer;">✕</button>
+            </div>
+            
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-size:13px; color:var(--text-secondary); margin-bottom:4px;">Se eu quiser a dose:</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="number" id="calc-input-dose" placeholder="Ex: 0.5" style="flex:1; padding:8px; border:1px solid var(--border); border-radius:6px; font-size:16px;" onkeyup="calculateDrugFromDose()">
+                    <span id="calc-label-dose" style="font-size:14px; color:var(--text-primary); font-weight:600;">mcg/kg/min</span>
+                </div>
+                <div style="margin-top:8px; padding:12px; background:rgba(13,91,143,0.05); border-radius:6px; border:1px dashed var(--accent);">
+                    <span style="font-size:13px; color:var(--text-secondary);">A vazão na bomba deve ser:</span>
+                    <div style="font-size:20px; font-weight:800; color:var(--accent); margin-top:4px;" id="calc-result-mlh">-- ml/h</div>
+                </div>
+            </div>
+
+            <hr style="border:none; border-top:1px solid var(--border); margin:16px 0;">
+
+            <div style="margin-bottom:16px;">
+                <label style="display:block; font-size:13px; color:var(--text-secondary); margin-bottom:4px;">Se a vazão for:</label>
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input type="number" id="calc-input-mlh" placeholder="Ex: 10" style="flex:1; padding:8px; border:1px solid var(--border); border-radius:6px; font-size:16px;" onkeyup="calculateDrugFromMlh()">
+                    <span style="font-size:14px; color:var(--text-primary); font-weight:600;">ml/h</span>
+                </div>
+                <div style="margin-top:8px; padding:12px; background:rgba(22,163,74,0.05); border-radius:6px; border:1px dashed #16a34a;">
+                    <span style="font-size:13px; color:var(--text-secondary);">A dose resultante será:</span>
+                    <div style="font-size:20px; font-weight:800; color:#16a34a; margin-top:4px;" id="calc-result-dose">--</div>
+                </div>
+            </div>
+            <div style="text-align:right;">
+                 <button class="btn btn-primary" onclick="applyDrugMlh()">Aplicar Vazão</button>
+            </div>
+        </div>
+    </div>
 
     <!-- APP LOGIC -->
     <script src="app.js"></script>
