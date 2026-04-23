@@ -273,6 +273,7 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDoeVKrSwyWluQHSWlN4k7LWHbTMymTyzk",
@@ -292,6 +293,7 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
         window.firebaseAuth = auth;
         window.firebaseAuthModule = { signOut };
         window.firebaseFirestore = { doc, setDoc, getDoc, collection, query, orderBy, getDocs };
+        window.firebaseFunctions = { getFunctions, httpsCallable };
 
         const loginScreen = document.getElementById('login-screen');
         const appContainer = document.getElementById('app-container');

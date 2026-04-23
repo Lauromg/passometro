@@ -443,8 +443,10 @@ function renderDashboard() {
         printHTML += `<div class="print-section"><span class="print-section-title">ATB:</span><span class="print-section-content print-atb-inline">${atbTexts.join(', ')}</span></div>`;
       }
 
-      // Latest evolution
-      if (latestEvo) {
+      // AI Summary / Latest evolution
+      if (bed.resumoEvolucoes) {
+        printHTML += `<div class="print-evo-latest" style="border-left: 3px solid #0d5b8f;"><strong style="color: #0d5b8f;">✨ Resumo Automático (IA):</strong><div style="white-space:pre-wrap; margin-top:4px;">${escapeHTML(bed.resumoEvolucoes)}</div></div>`;
+      } else if (latestEvo) {
         printHTML += `<div class="print-evo-latest"><strong>${latestEvo.shift === 'day' ? '☀ Dia' : '🌙 Noite'} ${latestEvo.date}:</strong> ${escapeHTML(latestEvo.text)}</div>`;
       }
 
@@ -695,7 +697,27 @@ function renderEvolucao(bed) {
     return db_ - da;
   });
 
-  list.innerHTML = sorted.map((evo, i) => `
+  let aiSummaryHTML = '';
+  if (bed.resumoEvolucoes) {
+    aiSummaryHTML = `
+      <div style="background: rgba(13,91,143,0.05); border-left: 4px solid var(--accent); padding: 12px; margin-bottom: 20px; border-radius: 4px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <h4 style="margin:0; color:var(--accent); font-size:13px; display:flex; align-items:center; gap:6px;">✨ Resumo Automático (IA)</h4>
+          <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted);">⟳ Atualizando resumo...</span>
+        </div>
+        <div style="font-size:13px; line-height:1.5; color:var(--text-primary); white-space:pre-wrap;">${escapeHTML(bed.resumoEvolucoes)}</div>
+      </div>
+    `;
+  } else if (bed.evolutions && bed.evolutions.length > 0) {
+    aiSummaryHTML = `
+      <div style="background: rgba(0,0,0,0.02); border: 1px dashed var(--border); padding: 12px; margin-bottom: 20px; border-radius: 4px; display:flex; justify-content:space-between; align-items:center;">
+         <span style="font-size:13px; color:var(--text-muted);">Nenhum resumo gerado ainda.</span>
+         <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted);">⟳ Gerando resumo...</span>
+      </div>
+    `;
+  }
+
+  list.innerHTML = aiSummaryHTML + sorted.map((evo, i) => `
     <div class="evolution-item">
       <button class="evo-delete" onclick="deleteEvolution(${bed.evolutions.indexOf(evo)})" title="Excluir">✕</button>
       <div class="evo-header">
@@ -713,7 +735,8 @@ function renderEvolucao(bed) {
 }
 
 function addEvolution() {
-  const bed = state.beds[state.currentBed];
+  const bedIdx = state.currentBed;
+  const bed = state.beds[bedIdx];
   if (!bed) return;
 
   let text = document.getElementById('new-evo-text').value.trim();
@@ -729,14 +752,56 @@ function addEvolution() {
   document.getElementById('new-evo-text').value = '';
   renderEvolucao(bed);
   triggerSave();
+  requestEvolutionSummary(bedIdx);
 }
 
 function deleteEvolution(idx) {
-  const bed = state.beds[state.currentBed];
+  const bedIdx = state.currentBed;
+  const bed = state.beds[bedIdx];
   if (!bed || !confirm('Excluir esta evolução?')) return;
   bed.evolutions.splice(idx, 1);
   renderEvolucao(bed);
   triggerSave();
+  requestEvolutionSummary(bedIdx);
+}
+
+async function requestEvolutionSummary(bedIdx) {
+  const bed = state.beds[bedIdx];
+  if (!bed) return;
+  
+  if (!bed.evolutions || bed.evolutions.length === 0) {
+    bed.resumoEvolucoes = '';
+    renderEvolucao(bed);
+    triggerSave();
+    return;
+  }
+
+  try {
+    if (!window.firebaseFunctions) return;
+    const { getFunctions, httpsCallable } = window.firebaseFunctions;
+    const functions = getFunctions(window.firebaseDb.app);
+    const gerarResumo = httpsCallable(functions, 'gerarResumoEvolucoes');
+    
+    // UI Feedback
+    showSaveIndicator('saving', '✨ Gerando resumo via IA...');
+    const loadingEl = document.getElementById('ai-summary-loading');
+    if (loadingEl) loadingEl.style.display = 'inline-block';
+
+    const result = await gerarResumo({ evolutions: bed.evolutions });
+    if (result.data && result.data.resumo) {
+       bed.resumoEvolucoes = result.data.resumo;
+       triggerSave();
+       if (state.currentBed === bedIdx) {
+           renderEvolucao(bed);
+       }
+       showSaveIndicator('saved', '✓ Resumo IA salvo!');
+    }
+  } catch(e) {
+    console.error("Erro ao gerar resumo IA:", e);
+    showSaveIndicator('error', 'Erro na IA do Resumo');
+    const loadingEl = document.getElementById('ai-summary-loading');
+    if (loadingEl) loadingEl.style.display = 'none';
+  }
 }
 
 async function copyEvolutionFormat(idx) {
