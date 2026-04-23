@@ -932,7 +932,7 @@ function renderEvolucao(bed) {
           <h4 style="margin:0; color:var(--accent); font-size:13px; display:flex; align-items:center; gap:6px;">✨ Resumo Automático (IA)</h4>
           <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted);">⟳ Atualizando resumo...</span>
         </div>
-        <div style="font-size:13px; line-height:1.5; color:var(--text-primary); white-space:pre-wrap;">${escapeHTML(bed.resumoEvolucoes)}</div>
+        <textarea onchange="updateResumoEvolucoes(this.value)" style="width: 100%; min-height: 100px; font-size: 13px; line-height: 1.5; color: var(--text-primary); background: rgba(255,255,255,0.7); border: 1px solid rgba(13,91,143,0.2); border-radius: 4px; padding: 8px; resize: vertical; font-family: inherit; box-sizing: border-box;">${escapeHTML(bed.resumoEvolucoes)}</textarea>
       </div>
     `;
   } else if (bed.evolutions && bed.evolutions.length > 0) {
@@ -1030,6 +1030,13 @@ async function requestEvolutionSummary(bedIdx) {
     if (loadingEl) loadingEl.style.display = 'none';
   }
 }
+
+window.updateResumoEvolucoes = function(newText) {
+  const bed = state.beds[state.currentBed];
+  if (!bed) return;
+  bed.resumoEvolucoes = newText;
+  triggerSave();
+};
 
 async function copyEvolutionFormat(idx) {
   const bed = state.beds[state.currentBed];
