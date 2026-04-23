@@ -646,6 +646,42 @@ async function renderBalancoDetail() {
     html += `</div>`;
     html += `<div class="bal-total" style="font-size:16px;font-weight:800;background:${bh >= 0 ? 'rgba(13,91,143,0.08)' : 'rgba(220,38,38,0.08)'};color:${bh >= 0 ? 'var(--accent)' : 'var(--danger)'};border-color:${bh >= 0 ? 'rgba(13,91,143,0.2)' : 'rgba(220,38,38,0.2)'};">BH: ${sign}${bh} mL</div>`;
 
+    // Detalhes Hora a Hora
+    html += `<details style="margin: 16px 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;">`;
+    html += `<summary style="padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-primary); user-select: none;">Ver detalhes hora a hora</summary>`;
+    html += `<div style="padding: 14px; border-top: 1px solid var(--border); overflow-x: auto;">`;
+    html += `<table class="atb-table" style="min-width: 400px; margin-bottom: 0;"><thead><tr>
+      <th style="width: 80px;">Hora</th>
+      <th style="text-align: right;">Ganhos (mL)</th>
+      <th style="text-align: right;">Diurese (mL)</th>
+      <th style="text-align: right;">Drenos (mL)</th>
+      <th style="text-align: right;">Balanço (mL)</th>
+    </tr></thead><tbody>`;
+
+    shiftHours.forEach(h => {
+      let ganhosH = 0;
+      (data.ganhos || []).forEach(g => { if (g.volumes && g.volumes[h]) ganhosH += parseFloat(g.volumes[h]) || 0; });
+      
+      let diureseH = 0;
+      (data.diurese || []).forEach(d => { if (d.volumes && d.volumes[h]) diureseH += parseFloat(d.volumes[h]) || 0; });
+      
+      let drenosH = 0;
+      (data.drenos || []).forEach(d => { if (d.volumes && d.volumes[h]) drenosH += parseFloat(d.volumes[h]) || 0; });
+
+      let bhH = ganhosH - diureseH - drenosH;
+      let signH = bhH >= 0 ? '+' : '';
+      let bhColor = bhH > 0 ? 'color: var(--accent);' : (bhH < 0 ? 'color: var(--danger);' : 'color: var(--text-muted);');
+
+      html += `<tr>
+        <td style="font-weight: 600; color: var(--text-secondary);">${h}:00</td>
+        <td style="text-align: right;">${ganhosH > 0 ? ganhosH : '-'}</td>
+        <td style="text-align: right;">${diureseH > 0 ? diureseH : '-'}</td>
+        <td style="text-align: right;">${drenosH > 0 ? drenosH : '-'}</td>
+        <td style="font-weight: 600; text-align: right; ${bhColor}">${bhH !== 0 ? signH + bhH : '-'}</td>
+      </tr>`;
+    });
+    html += `</tbody></table></div></details>`;
+
     // Clinical summary badges
     const badges = [];
     let maxTemp2 = 0, hasTemp2 = false, feverEps2 = 0, hypothermiaEps2 = 0;
@@ -946,6 +982,115 @@ async function inserirBalancoNaEvolucao() {
   
   const textarea = document.getElementById('new-evo-text');
   const addTxt = textoEvo.join('\n');
+  if (textarea.value.trim() !== '') {
+    textarea.value += '\n\n' + addTxt;
+  } else {
+    textarea.value = addTxt;
+  }
+}
+
+async function inserirInfusoesNaEvolucao() {
+  const bedIdx = state.currentBed;
+  if (bedIdx === null) return;
+  
+  await loadBalancoData();
+  
+  let dateStr = document.getElementById('new-evo-date').value.trim();
+  let searchDateISO = formatDateISO(new Date());
+  
+  if (dateStr) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      searchDateISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+  }
+
+  // Vamos analisar ambos os turnos do dia para ter uma visão de "24h"
+  const shifts = ['diurno', 'noturno'];
+  const allGanhos = {};
+
+  shifts.forEach(shift => {
+    const key = `${bedIdx}_${searchDateISO}_${shift}`;
+    const data = balancoData[key];
+    if (data && data.ganhos) {
+      data.ganhos.forEach(g => {
+        const desc = g.descricao ? g.descricao.trim() : 'Sem descrição';
+        if (!desc) return;
+        
+        if (!allGanhos[desc]) {
+          allGanhos[desc] = { hourlyValues: [], totalVolume: 0 };
+        }
+        
+        // Coletar valores hora a hora
+        if (g.volumes) {
+          const hours = shift === 'diurno' 
+            ? ['07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18']
+            : ['19', '20', '21', '22', '23', '00', '01', '02', '03', '04', '05', '06'];
+            
+          hours.forEach(h => {
+            if (g.volumes[h] !== undefined && g.volumes[h] !== '') {
+              const val = parseFloat(g.volumes[h]);
+              if (!isNaN(val)) {
+                allGanhos[desc].hourlyValues.push(val);
+                allGanhos[desc].totalVolume += val;
+              }
+            }
+          });
+        } else {
+          // Fallback if no hourly volumes but has total volume
+          const val = parseFloat(g.volume);
+          if (!isNaN(val) && val > 0) {
+             allGanhos[desc].totalVolume += val;
+          }
+        }
+      });
+    }
+  });
+
+  const infusoesText = [];
+  
+  Object.keys(allGanhos).forEach(desc => {
+    if (desc === 'Sem descrição') return; // Ignorar ganhos vazios
+    const info = allGanhos[desc];
+    const values = info.hourlyValues;
+    const nonZeroValues = values.filter(v => v > 0);
+    
+    if (nonZeroValues.length === 0) {
+      if (info.totalVolume > 0) {
+        infusoesText.push(`- ${desc}: volume total ${info.totalVolume} ml`);
+      }
+      return;
+    }
+
+    const first = nonZeroValues[0];
+    const last = nonZeroValues[nonZeroValues.length - 1];
+    const min = Math.min(...nonZeroValues);
+    const max = Math.max(...nonZeroValues);
+
+    let status = '';
+    if (nonZeroValues.length <= 2 && values.length > 2) {
+      // Muito poucos valores não-zero comparado ao total -> intermitente
+      status = `intermitente (total ${info.totalVolume} ml)`;
+    } else if (max === min) {
+      status = `dose estável (${max} ml/h)`;
+    } else if (last > first) {
+      status = `dose crescente (${min} a ${max} ml/h)`;
+    } else if (last < first) {
+      status = `dose decrescente (${max} a ${min} ml/h)`;
+    } else {
+      status = `dose variável (${min} a ${max} ml/h)`;
+    }
+
+    infusoesText.push(`- ${desc}: ${status}`);
+  });
+
+  if (infusoesText.length === 0) {
+    alert(`Nenhuma infusão encontrada para a data ${searchDateISO}.`);
+    return;
+  }
+
+  const textarea = document.getElementById('new-evo-text');
+  const addTxt = "Infusões em 24h:\n" + infusoesText.join('\n');
   if (textarea.value.trim() !== '') {
     textarea.value += '\n\n' + addTxt;
   } else {
