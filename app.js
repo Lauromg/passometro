@@ -570,7 +570,6 @@ async function renderBalancoDetail() {
   const container = document.getElementById('balanco-detail-content');
   if (!container) return;
 
-  // Always refresh balance data from Firebase when tab is opened
   container.innerHTML = '<p style="color:var(--text-muted);font-style:italic;">Carregando dados do balanço...</p>';
   await loadBalancoData();
 
@@ -578,6 +577,8 @@ async function renderBalancoDetail() {
   const today = formatDateISO(new Date());
   let html = '';
   let hasData = false;
+  
+  const chartsToRender = [];
 
   ['diurno', 'noturno'].forEach(shift => {
     const key = `${bedIdx}_${today}_${shift}`;
@@ -589,7 +590,6 @@ async function renderBalancoDetail() {
       ? ['07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18']
       : ['19', '20', '21', '22', '23', '00', '01', '02', '03', '04', '05', '06'];
 
-    // Check if there's any actual data
     const hasSV = Object.keys(data.sinaisVitais || {}).length > 0;
     const hasGanhos = (data.ganhos || []).length > 0;
     const hasDiurese = (data.diurese || []).length > 0;
@@ -600,87 +600,174 @@ async function renderBalancoDetail() {
     if (!hasSV && !hasGanhos && !hasDiurese && !hasDrenos && !hasGlic && !hasHD) return;
     hasData = true;
 
-    html += `<div style="margin-bottom:20px;">`;
-    html += `<h4 style="color:var(--accent);margin-bottom:12px;">${shiftLabel}</h4>`;
+    html += `<div style="margin-bottom:30px;">`;
+    html += `<h4 style="color:var(--accent);margin-bottom:16px;">${shiftLabel}</h4>`;
 
-    // Vital signs table
-    if (hasSV) {
-      html += `<div style="overflow-x:auto;margin-bottom:16px;"><table class="sv-table"><thead><tr>
-        <th>Hora</th><th>PA</th><th>FC</th><th>FR</th><th>SpO₂</th><th>Tax</th><th>Obs</th>
-      </tr></thead><tbody>`;
-      shiftHours.forEach(h => {
-        const sv = data.sinaisVitais[h];
-        if (sv && (sv.pa || sv.fc || sv.fr || sv.spo2 || sv.tax)) {
-          html += `<tr>
-            <td style="font-weight:700;color:var(--accent);">${h}:00</td>
-            <td>${sv.pa || '-'}</td><td>${sv.fc || '-'}</td>
-            <td>${sv.fr || '-'}</td><td>${sv.spo2 || '-'}</td>
-            <td>${sv.tax || '-'}</td><td>${sv.obs || ''}</td>
-          </tr>`;
-        }
-      });
-      html += `</tbody></table></div>`;
-    }
+    // 1. Gráfico Hemodinâmico
+    html += `<div style="margin-bottom: 20px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+      <h5 style="margin-top: 0; margin-bottom: 12px; font-size: 13px; color: var(--text-secondary);">📉 Evolução Hemodinâmica</h5>
+      <div style="height: 220px; position: relative;">
+         <canvas id="chart-hemo-${shift}"></canvas>
+      </div>
+    </div>`;
 
-    // Glycemia
-    if (hasGlic) {
-      html += `<p style="font-weight:700;font-size:12px;color:var(--text-muted);margin:8px 0 4px;">GLICEMIA</p>`;
-      data.glicemia.forEach(g => {
-        html += `<span style="display:inline-block;margin-right:12px;font-size:13px;">${g.hora || '?'}: <strong>${g.valor || '-'}</strong> mg/dL${g.insulina ? ` (${g.insulina}UI)` : ''}</span>`;
-      });
-    }
-
-    // BH calculation
-    const ganhos = (data.ganhos || []).reduce((s, g) => s + (parseFloat(g.volume) || 0), 0);
-    const diurese = (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
-    const drenos = (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
-    const hd = parseFloat(data.hd?.ufReal) || 0;
-    const evac = (data.evacuacoes || []).length * 200;
-    const perdas = diurese + drenos + hd + evac;
-    const bh = ganhos - perdas;
-    const sign = bh >= 0 ? '+' : '';
-
-    html += `<div style="display:flex;gap:24px;margin:12px 0;flex-wrap:wrap;">`;
-    if (hasGanhos) html += `<div class="bal-total" style="flex:1;min-width:150px;">Ganhos: ${ganhos} mL</div>`;
-    html += `<div class="bal-total" style="flex:1;min-width:150px;">Perdas: ${perdas} mL (Diurese ${diurese}${drenos > 0 ? ` | Drenos ${drenos}` : ''}${hd > 0 ? ` | HD ${hd}` : ''})</div>`;
-    html += `</div>`;
-    html += `<div class="bal-total" style="font-size:16px;font-weight:800;background:${bh >= 0 ? 'rgba(13,91,143,0.08)' : 'rgba(220,38,38,0.08)'};color:${bh >= 0 ? 'var(--accent)' : 'var(--danger)'};border-color:${bh >= 0 ? 'rgba(13,91,143,0.2)' : 'rgba(220,38,38,0.2)'};">BH: ${sign}${bh} mL</div>`;
-
-    // Detalhes Hora a Hora
-    html += `<details style="margin: 16px 0; background: var(--bg-card); border: 1px solid var(--border); border-radius: 6px;">`;
-    html += `<summary style="padding: 10px 14px; font-size: 13px; font-weight: 600; cursor: pointer; color: var(--text-primary); user-select: none;">Ver detalhes hora a hora</summary>`;
-    html += `<div style="padding: 14px; border-top: 1px solid var(--border); overflow-x: auto;">`;
-    html += `<table class="atb-table" style="min-width: 400px; margin-bottom: 0;"><thead><tr>
-      <th style="width: 80px;">Hora</th>
-      <th style="text-align: right;">Ganhos (mL)</th>
-      <th style="text-align: right;">Diurese (mL)</th>
-      <th style="text-align: right;">Drenos (mL)</th>
-      <th style="text-align: right;">Balanço (mL)</th>
-    </tr></thead><tbody>`;
-
+    // Coleta de dados para o gráfico
+    const chartData = { shift, hours: shiftHours, pas: [], pad: [], fc: [], nora: [] };
     shiftHours.forEach(h => {
-      let ganhosH = 0;
-      (data.ganhos || []).forEach(g => { if (g.volumes && g.volumes[h]) ganhosH += parseFloat(g.volumes[h]) || 0; });
-      
-      let diureseH = 0;
-      (data.diurese || []).forEach(d => { if (d.volumes && d.volumes[h]) diureseH += parseFloat(d.volumes[h]) || 0; });
-      
-      let drenosH = 0;
-      (data.drenos || []).forEach(d => { if (d.volumes && d.volumes[h]) drenosH += parseFloat(d.volumes[h]) || 0; });
+        const pa = (data.sinaisVitais && data.sinaisVitais[h]) ? data.sinaisVitais[h].pa : null;
+        if (pa && pa.includes('/')) {
+            const [sys, dia] = pa.split('/');
+            chartData.pas.push(sys ? parseInt(sys) : null);
+            chartData.pad.push(dia ? parseInt(dia) : null);
+        } else {
+            chartData.pas.push(null);
+            chartData.pad.push(null);
+        }
 
-      let bhH = ganhosH - diureseH - drenosH;
-      let signH = bhH >= 0 ? '+' : '';
-      let bhColor = bhH > 0 ? 'color: var(--accent);' : (bhH < 0 ? 'color: var(--danger);' : 'color: var(--text-muted);');
+        const fc = (data.sinaisVitais && data.sinaisVitais[h]) ? data.sinaisVitais[h].fc : null;
+        chartData.fc.push(fc ? parseInt(fc) : null);
 
-      html += `<tr>
-        <td style="font-weight: 600; color: var(--text-secondary);">${h}:00</td>
-        <td style="text-align: right;">${ganhosH > 0 ? ganhosH : '-'}</td>
-        <td style="text-align: right;">${diureseH > 0 ? diureseH : '-'}</td>
-        <td style="text-align: right;">${drenosH > 0 ? drenosH : '-'}</td>
-        <td style="font-weight: 600; text-align: right; ${bhColor}">${bhH !== 0 ? signH + bhH : '-'}</td>
-      </tr>`;
+        let vasoDose = 0;
+        if (data.ganhos) {
+            const noraGanho = data.ganhos.find(g => g.descricao && g.descricao.toLowerCase().includes('nora'));
+            if (noraGanho && noraGanho.volumes && noraGanho.volumes[h]) {
+                vasoDose = parseFloat(noraGanho.volumes[h]);
+            }
+        }
+        chartData.nora.push(vasoDose);
     });
-    html += `</tbody></table></div></details>`;
+    chartsToRender.push(chartData);
+
+    // 2. Mapa de Fluxo (Flowsheet)
+    html += `<div style="overflow-x: auto; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; box-shadow: 0 2px 4px rgba(0,0,0,0.02);">
+      <table class="atb-table" style="min-width: 700px; margin: 0; font-size: 12px;">
+        <thead>
+          <tr>
+            <th style="width: 160px; position: sticky; left: 0; background: var(--surface); z-index: 2; border-right: 1px solid var(--border);">Parâmetro</th>
+            ${shiftHours.map(h => `<th style="text-align: center; min-width: 45px;">${h}h</th>`).join('')}
+            <th style="text-align: center; min-width: 60px; background: rgba(0,0,0,0.02);">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+    `;
+
+    // --- SINAIS VITAIS ---
+    html += `<tr><td colspan="${shiftHours.length + 2}" style="background: rgba(0,0,0,0.04); font-weight: 700; padding: 6px 10px; color: var(--text-primary);">Sinais Vitais</td></tr>`;
+    
+    // PA
+    html += `<tr><td style="position: sticky; left: 0; background: var(--bg-card); font-weight: 600; border-right: 1px solid var(--border);">PA (mmHg)</td>`;
+    shiftHours.forEach(h => {
+        const val = (data.sinaisVitais && data.sinaisVitais[h]) ? data.sinaisVitais[h].pa : '';
+        html += `<td style="text-align: center;">${val || '-'}</td>`;
+    });
+    html += `<td style="background: rgba(0,0,0,0.02);"></td></tr>`;
+
+    // FC
+    html += `<tr><td style="position: sticky; left: 0; background: var(--bg-card); font-weight: 600; border-right: 1px solid var(--border);">FC (bpm)</td>`;
+    shiftHours.forEach(h => {
+        const val = (data.sinaisVitais && data.sinaisVitais[h]) ? data.sinaisVitais[h].fc : '';
+        html += `<td style="text-align: center;">${val || '-'}</td>`;
+    });
+    html += `<td style="background: rgba(0,0,0,0.02);"></td></tr>`;
+
+    // SpO2
+    html += `<tr><td style="position: sticky; left: 0; background: var(--bg-card); font-weight: 600; border-right: 1px solid var(--border);">SpO₂ (%)</td>`;
+    shiftHours.forEach(h => {
+        const val = (data.sinaisVitais && data.sinaisVitais[h]) ? data.sinaisVitais[h].spo2 : '';
+        html += `<td style="text-align: center;">${val || '-'}</td>`;
+    });
+    html += `<td style="background: rgba(0,0,0,0.02);"></td></tr>`;
+
+    // Temp
+    html += `<tr><td style="position: sticky; left: 0; background: var(--bg-card); font-weight: 600; border-right: 1px solid var(--border);">Temp (°C)</td>`;
+    shiftHours.forEach(h => {
+        const val = (data.sinaisVitais && data.sinaisVitais[h]) ? data.sinaisVitais[h].tax : '';
+        html += `<td style="text-align: center;">${val || '-'}</td>`;
+    });
+    html += `<td style="background: rgba(0,0,0,0.02);"></td></tr>`;
+
+    // --- INFUSÕES ---
+    if (data.ganhos && data.ganhos.length > 0) {
+      html += `<tr><td colspan="${shiftHours.length + 2}" style="background: rgba(13,91,143,0.08); color: var(--accent); font-weight: 700; padding: 6px 10px;">Infusões e Ganhos</td></tr>`;
+      
+      data.ganhos.forEach(g => {
+         const desc = g.descricao ? g.descricao.trim() : 'S/ Descrição';
+         if (!desc) return;
+         let rowTotal = 0;
+         html += `<tr><td style="position: sticky; left: 0; background: var(--bg-card); font-weight: 600; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--border);" title="${desc}">${desc}</td>`;
+         shiftHours.forEach(h => {
+            const val = (g.volumes && g.volumes[h]) ? parseFloat(g.volumes[h]) : 0;
+            if (val > 0) rowTotal += val;
+            html += `<td style="text-align: center; color: var(--accent);">${val > 0 ? val : '-'}</td>`;
+         });
+         // Fallback
+         if (rowTotal === 0 && parseFloat(g.volume) > 0) rowTotal = parseFloat(g.volume);
+         html += `<td style="text-align: center; font-weight: 700; color: var(--accent); background: rgba(0,0,0,0.02);">${rowTotal > 0 ? rowTotal : '-'}</td></tr>`;
+      });
+    }
+
+    // --- PERDAS ---
+    html += `<tr><td colspan="${shiftHours.length + 2}" style="background: rgba(220,38,38,0.08); color: var(--danger); font-weight: 700; padding: 6px 10px;">Perdas</td></tr>`;
+    
+    // Diurese
+    let totalDiurese = 0;
+    html += `<tr><td style="position: sticky; left: 0; background: var(--bg-card); font-weight: 600; color: var(--danger); border-right: 1px solid var(--border);">Diurese</td>`;
+    shiftHours.forEach(h => {
+       let valH = 0;
+       (data.diurese || []).forEach(d => { if (d.volumes && d.volumes[h]) valH += parseFloat(d.volumes[h]) || 0; });
+       if (valH > 0) totalDiurese += valH;
+       html += `<td style="text-align: center; color: var(--danger);">${valH > 0 ? valH : '-'}</td>`;
+    });
+    if (totalDiurese === 0) totalDiurese = (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
+    html += `<td style="text-align: center; font-weight: 700; color: var(--danger); background: rgba(0,0,0,0.02);">${totalDiurese > 0 ? totalDiurese : '-'}</td></tr>`;
+
+    // Drenos
+    let totalDrenos = 0;
+    html += `<tr><td style="position: sticky; left: 0; background: var(--bg-card); font-weight: 600; color: var(--danger); border-right: 1px solid var(--border);">Drenos</td>`;
+    shiftHours.forEach(h => {
+       let valH = 0;
+       (data.drenos || []).forEach(d => { if (d.volumes && d.volumes[h]) valH += parseFloat(d.volumes[h]) || 0; });
+       if (valH > 0) totalDrenos += valH;
+       html += `<td style="text-align: center; color: var(--danger);">${valH > 0 ? valH : '-'}</td>`;
+    });
+    if (totalDrenos === 0) totalDrenos = (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
+    html += `<td style="text-align: center; font-weight: 700; color: var(--danger); background: rgba(0,0,0,0.02);">${totalDrenos > 0 ? totalDrenos : '-'}</td></tr>`;
+
+    // --- BALANÇO HÍDRICO ---
+    html += `<tr><td colspan="${shiftHours.length + 2}" style="background: rgba(0,0,0,0.04); font-weight: 700; padding: 6px 10px;">Resumo Balanço</td></tr>`;
+    html += `<tr><td style="position: sticky; left: 0; background: var(--bg-card); font-weight: 700; border-right: 1px solid var(--border);">Balanço da Hora</td>`;
+    
+    let totalGanhosCalc = 0;
+    let totalPerdasCalc = 0;
+    
+    shiftHours.forEach(h => {
+       let gH = 0, diuH = 0, dreH = 0;
+       (data.ganhos || []).forEach(g => { if (g.volumes && g.volumes[h]) gH += parseFloat(g.volumes[h]) || 0; });
+       (data.diurese || []).forEach(d => { if (d.volumes && d.volumes[h]) diuH += parseFloat(d.volumes[h]) || 0; });
+       (data.drenos || []).forEach(d => { if (d.volumes && d.volumes[h]) dreH += parseFloat(d.volumes[h]) || 0; });
+       
+       let bhH = gH - diuH - dreH;
+       let bhColor = bhH > 0 ? 'color: var(--accent);' : (bhH < 0 ? 'color: var(--danger);' : 'color: var(--text-muted);');
+       html += `<td style="text-align: center; font-weight: 700; ${bhColor}">${bhH !== 0 ? (bhH > 0 ? '+' : '') + bhH : '-'}</td>`;
+       
+       totalGanhosCalc += gH;
+       totalPerdasCalc += (diuH + dreH);
+    });
+
+    if (totalGanhosCalc === 0) totalGanhosCalc = (data.ganhos || []).reduce((s, g) => s + (parseFloat(g.volume) || 0), 0);
+    if (totalPerdasCalc === 0) {
+      const evac = (data.evacuacoes || []).length * 200;
+      const hd = parseFloat(data.hd?.ufReal) || 0;
+      totalPerdasCalc = totalDiurese + totalDrenos + evac + hd;
+    }
+
+    const bhTotal = totalGanhosCalc - totalPerdasCalc;
+    const signTotal = bhTotal >= 0 ? '+' : '';
+    const bhTotalColor = bhTotal > 0 ? 'color: var(--accent);' : (bhTotal < 0 ? 'color: var(--danger);' : 'color: var(--text-primary);');
+    
+    html += `<td style="text-align: center; font-weight: 800; font-size: 14px; ${bhTotalColor}; background: rgba(0,0,0,0.03); border-left: 2px solid var(--border);">${signTotal}${bhTotal}</td></tr>`;
+
+    html += `</tbody></table></div>`;
 
     // Clinical summary badges
     const badges = [];
@@ -711,10 +798,10 @@ async function renderBalancoDetail() {
     if (hasGlic2) badges.push(`<span class="resumo-badge resumo-info">ΔGlicemia: ${minGlic2}–${maxGlic2} mg/dL (Δ${maxGlic2 - minGlic2})</span>`);
 
     if (badges.length > 0) {
-      html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">${badges.join('')}</div>`;
+      html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">${badges.join('')}</div>`;
     }
 
-    html += `</div><hr style="border:none;border-top:1px solid var(--border);margin:16px 0;">`;
+    html += `</div><hr style="border:none;border-top:1px solid var(--border);margin:24px 0;">`;
   });
 
   if (!hasData) {
@@ -722,6 +809,91 @@ async function renderBalancoDetail() {
   }
 
   container.innerHTML = html;
+
+  // Renderizar gráficos após inserir no DOM
+  setTimeout(() => {
+    chartsToRender.forEach(c => {
+      const canvas = document.getElementById(`chart-hemo-${c.shift}`);
+      if (!canvas) return;
+
+      // Destruir gráfico anterior se existir (limpeza)
+      if (window[`chart_hemo_${c.shift}`]) {
+          window[`chart_hemo_${c.shift}`].destroy();
+      }
+
+      window[`chart_hemo_${c.shift}`] = new Chart(canvas, {
+        type: 'line',
+        data: {
+          labels: c.hours.map(h => `${h}h`),
+          datasets: [
+            {
+              label: 'PA Sistólica',
+              data: c.pas,
+              borderColor: '#b91c1c', // red-700
+              backgroundColor: '#b91c1c',
+              tension: 0.3,
+              spanGaps: true,
+              yAxisID: 'y'
+            },
+            {
+              label: 'PA Diastólica',
+              data: c.pad,
+              borderColor: '#ef4444', // red-500
+              backgroundColor: '#ef4444',
+              tension: 0.3,
+              spanGaps: true,
+              yAxisID: 'y'
+            },
+            {
+              label: 'FC',
+              data: c.fc,
+              borderColor: '#0284c7', // sky-600
+              backgroundColor: '#0284c7',
+              tension: 0.3,
+              spanGaps: true,
+              yAxisID: 'y'
+            },
+            {
+              type: 'bar',
+              label: 'Noradrenalina (ml/h)',
+              data: c.nora,
+              backgroundColor: 'rgba(245, 158, 11, 0.5)', // amber-500
+              borderColor: '#f59e0b',
+              borderWidth: 1,
+              yAxisID: 'y1'
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            y: {
+              type: 'linear',
+              display: true,
+              position: 'left',
+              title: { display: true, text: 'PA / FC' },
+              min: 0,
+              max: 200
+            },
+            y1: {
+              type: 'linear',
+              display: true,
+              position: 'right',
+              grid: { drawOnChartArea: false },
+              title: { display: true, text: 'Nora (ml/h)' },
+              min: 0,
+              suggestedMax: 20
+            }
+          },
+          plugins: {
+            legend: { position: 'top', labels: { boxWidth: 12, font: { size: 10 } } }
+          }
+        }
+      });
+    });
+  }, 50);
 }
 
 function renderHistoria(bed) {
