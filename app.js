@@ -338,7 +338,8 @@ function renderDashboard() {
   state.beds.forEach((bed, idx) => {
     const occupied = bed.name.trim() !== '';
     const planClass = bed.plan ? `plan-${bed.plan.toLowerCase()}` : '';
-    const activeAtbs = (bed.antibiotics || []).filter(a => a.name.trim());
+    const allAtbs = (bed.antibiotics || []).filter(a => a.name.trim());
+    const activeAtbs = allAtbs.filter(a => !a.endDate);
     const activeDevices = DEVICES_LIST.filter(d => bed.devices && bed.devices[d.id]?.active);
 
     if (occupied) {
@@ -456,8 +457,15 @@ function renderDashboard() {
       }
 
       // Antibiotics
-      if (activeAtbs.length > 0) {
-        const atbTexts = activeAtbs.map(a => `${a.name} D${calcDays(a.startDate)}`);
+      if (allAtbs.length > 0) {
+        const atbTexts = allAtbs.map(a => {
+          if (a.endDate) {
+            const endStr = a.endDate.split('-').reverse().join('/');
+            return `${a.name} (Finalizado: ${endStr}, D${calcDays(a.startDate, a.endDate)})`;
+          } else {
+            return `${a.name} D${calcDays(a.startDate)}`;
+          }
+        });
         printHTML += `<div class="print-section"><span class="print-section-title">ATB:</span><span class="print-section-content print-atb-inline">${atbTexts.join(', ')}</span></div>`;
       }
 
@@ -1014,7 +1022,7 @@ async function requestEvolutionSummary(bedIdx) {
     const loadingEl = document.getElementById('ai-summary-loading');
     if (loadingEl) loadingEl.style.display = 'inline-block';
 
-    const result = await gerarResumo({ evolutions: bed.evolutions });
+    const result = await gerarResumo({ evolutions: bed.evolutions, antibiotics: bed.antibiotics });
     if (result.data && result.data.resumo) {
        bed.resumoEvolucoes = result.data.resumo;
        triggerSave();
@@ -1292,11 +1300,13 @@ function renderAntibioticos(bed) {
   if (!bed.antibiotics) bed.antibiotics = [];
 
   const rows = bed.antibiotics.map((atb, i) => {
-    const dCount = calcDays(atb.startDate);
+    const dCount = calcDays(atb.startDate, atb.endDate);
+    const opacity = atb.endDate ? '0.6' : '1';
     return `
-      <tr>
+      <tr style="opacity: ${opacity}">
         <td><input type="text" value="${escapeAttr(atb.name)}" onchange="updateAtb(${i},'name',this.value)" placeholder="Nome do ATB"></td>
         <td><input type="date" value="${atb.startDate || ''}" onchange="updateAtb(${i},'startDate',this.value)"></td>
+        <td><input type="date" value="${atb.endDate || ''}" onchange="updateAtb(${i},'endDate',this.value)" title="Data de término (se finalizado)"></td>
         <td style="text-align:center"><span class="d-count">${dCount}</span></td>
         <td><input type="text" value="${escapeAttr(atb.notes || '')}" onchange="updateAtb(${i},'notes',this.value)" placeholder="Obs."></td>
         <td><button class="btn btn-danger btn-sm btn-icon" onclick="deleteAtb(${i})">✕</button></td>
@@ -1311,7 +1321,7 @@ function addAtb() {
   const bed = state.beds[state.currentBed];
   if (!bed) return;
   if (!bed.antibiotics) bed.antibiotics = [];
-  bed.antibiotics.push({ name: '', startDate: formatDateISO(new Date()), notes: '' });
+  bed.antibiotics.push({ name: '', startDate: formatDateISO(new Date()), endDate: '', notes: '' });
   renderAntibioticos(bed);
   triggerSave();
 }
@@ -2039,12 +2049,16 @@ function clearPatient() {
 }
 
 // ===== HELPERS =====
-function calcDays(startDate) {
+function calcDays(startDate, endDate) {
   if (!startDate) return 0;
   const start = new Date(startDate + 'T00:00:00');
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const diff = Math.floor((now - start) / (1000 * 60 * 60 * 24));
+  let end = new Date();
+  if (endDate) {
+    const parsedEnd = new Date(endDate + 'T00:00:00');
+    if (parsedEnd < end) end = parsedEnd;
+  }
+  end.setHours(0, 0, 0, 0);
+  const diff = Math.floor((end - start) / (1000 * 60 * 60 * 24));
   return Math.max(diff + 1, 1);
 }
 

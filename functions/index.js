@@ -17,7 +17,7 @@ exports.gerarResumoEvolucoes = onCall({ cors: true }, async (request) => {
     );
   }
 
-  const { evolutions } = request.data;
+  const { evolutions, antibiotics } = request.data;
 
   if (!evolutions || !Array.isArray(evolutions) || evolutions.length === 0) {
     throw new HttpsError(
@@ -34,13 +34,24 @@ exports.gerarResumoEvolucoes = onCall({ cors: true }, async (request) => {
     })
     .join("\n\n---\n\n");
 
+  let atbTexto = "Nenhum antibiótico registrado.";
+  if (antibiotics && Array.isArray(antibiotics) && antibiotics.length > 0) {
+     atbTexto = antibiotics.filter(a => a.name && a.name.trim()).map(a => {
+        const fim = a.endDate ? ` (Finalizado em ${a.endDate})` : " (Ativo)";
+        return `- ${a.name}, Início: ${a.startDate}${fim}`;
+     }).join("\n");
+  }
+
   const prompt = `Atue como um médico intensivista muito experiente.
-Abaixo está o histórico de evoluções de um paciente internado na UTI. 
+Abaixo está o histórico de evoluções de um paciente internado na UTI, bem como a lista de antibióticos utilizados.
 Sua tarefa é criar um resumo médico conciso, objetivo e muito bem estruturado do quadro atual do paciente para a passagem de plantão (passômetro).
-Destaque as informações mais relevantes, a evolução do quadro clínico e as intercorrências. 
+Destaque as informações mais relevantes, a evolução do quadro clínico, as intercorrências, e inclua os dados dos antibióticos em uso ou recém-finalizados, se forem relevantes.
 Não invente informações, use apenas o que está no texto fornecido.
 Seja direto e use linguagem técnica adequada.
 Não responda com "Aqui está o resumo..." ou similares. Apenas forneça o resumo diretamente.
+
+💊 Antibióticos:
+${atbTexto}
 
 📋 Histórico de Evoluções:
 ${evolucoesTexto}`;
