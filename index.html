@@ -44,6 +44,7 @@
             <div class="header-right">
                 <span class="header-date" id="header-date"></span>
 
+                <button class="btn-header btn-clipboard" onclick="openClipboard()">📋 Área de Transferência</button>
                 <button class="btn-header btn-print" onclick="printPassometro()">🖨️ Imprimir</button>
                 <button class="btn-header btn-logout" onclick="logout()">Sair</button>
             </div>
@@ -312,6 +313,33 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
         </div>
     </div>
 
+    <!-- CLIPBOARD MODAL -->
+    <div id="clipboard-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:var(--bg-card); padding:24px; border-radius:12px; width:90%; max-width:600px; box-shadow:0 10px 25px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <div>
+                    <h3 style="margin:0; font-size:18px;">📋 Área de Transferência Global</h3>
+                    <p style="margin:4px 0 0; font-size:12px; color:var(--text-secondary);">Sincronização em tempo real. O que você colar aqui aparecerá no outro computador.</p>
+                </div>
+                <button onclick="closeClipboard()" style="background:none; border:none; font-size:20px; cursor:pointer;">✕</button>
+            </div>
+            
+            <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap: wrap;">
+                <button class="btn btn-sm" style="border: 1px solid var(--border); background: var(--surface);" onclick="clipboardSelectAll()">Selecionar Tudo</button>
+                <button class="btn btn-sm" style="border: 1px solid var(--border); background: var(--surface);" onclick="clipboardCopy()">Copiar</button>
+                <button class="btn btn-sm" style="border: 1px solid var(--border); background: var(--surface);" onclick="clipboardCut()">Recortar</button>
+                <button class="btn btn-sm btn-danger" style="margin-left: auto;" onclick="clipboardClear()">Apagar</button>
+            </div>
+
+            <textarea id="clipboard-textarea" placeholder="Cole ou digite seu texto aqui..." style="flex:1; min-height:300px; width:100%; border:1px solid var(--border); border-radius:6px; padding:12px; font-size:14px; font-family:inherit; resize:vertical;" oninput="onClipboardInput()"></textarea>
+            
+            <div style="display:flex; justify-content: space-between; align-items:center; margin-top: 12px;">
+                <span id="clipboard-status" style="font-size: 12px; color: var(--text-secondary);">Conectado...</span>
+                <button class="btn btn-primary" onclick="closeClipboard()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <!-- APP LOGIC -->
     <script src="app.js"></script>
 
@@ -320,7 +348,7 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, orderBy, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
         import { getFunctions, httpsCallable } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js";
 
         const firebaseConfig = {
@@ -340,7 +368,7 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
         window.firebaseDb = db;
         window.firebaseAuth = auth;
         window.firebaseAuthModule = { signOut };
-        window.firebaseFirestore = { doc, setDoc, getDoc, collection, query, orderBy, getDocs };
+        window.firebaseFirestore = { doc, setDoc, getDoc, collection, query, orderBy, getDocs, onSnapshot };
         window.firebaseFunctions = { getFunctions, httpsCallable };
 
         const loginScreen = document.getElementById('login-screen');

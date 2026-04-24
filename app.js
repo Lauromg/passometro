@@ -2107,6 +2107,133 @@ function logout() {
   }
 }
 
+// ===== CLIPBOARD =====
+let clipboardUnsubscribe = null;
+
+function openClipboard() {
+  const modal = document.getElementById('clipboard-modal');
+  if (modal) {
+    modal.style.display = 'flex';
+    document.getElementById('clipboard-status').textContent = 'Conectando...';
+    
+    // Subscribe to Firebase real-time updates
+    if (window.firebaseDb && window.firebaseFirestore?.onSnapshot) {
+      const { doc, onSnapshot } = window.firebaseFirestore;
+      const ref = doc(window.firebaseDb, 'passometro/clipboard');
+      
+      clipboardUnsubscribe = onSnapshot(ref, (snap) => {
+        if (snap.exists()) {
+          const text = snap.data().text || '';
+          const textarea = document.getElementById('clipboard-textarea');
+          // Update only if changed externally to not interrupt typing
+          if (textarea.value !== text && document.activeElement !== textarea) {
+            textarea.value = text;
+          } else if (document.activeElement === textarea) {
+            // If focused, we could lose cursor position if we overwrite blindly. 
+            // Better to only overwrite if our local content is different and we aren't currently typing.
+            // A simple debounce handles this via onClipboardInput, but for simplicity:
+            if(textarea.value !== text && !clipboardSaveTimeout) {
+                textarea.value = text;
+            }
+          }
+        }
+        document.getElementById('clipboard-status').textContent = 'Sincronizado ✔';
+      }, (error) => {
+        console.error('Clipboard sync error:', error);
+        document.getElementById('clipboard-status').textContent = 'Erro de sincronização ✗';
+      });
+    } else {
+       document.getElementById('clipboard-status').textContent = 'Firebase não disponível ✗';
+    }
+  }
+}
+
+function closeClipboard() {
+  const modal = document.getElementById('clipboard-modal');
+  if (modal) {
+    modal.style.display = 'none';
+  }
+  if (clipboardUnsubscribe) {
+    clipboardUnsubscribe();
+    clipboardUnsubscribe = null;
+  }
+}
+
+let clipboardSaveTimeout = null;
+function onClipboardInput() {
+  document.getElementById('clipboard-status').textContent = 'Salvando...';
+  clearTimeout(clipboardSaveTimeout);
+  clipboardSaveTimeout = setTimeout(() => {
+    clipboardSaveTimeout = null;
+    if (window.firebaseDb && window.firebaseFirestore) {
+      const { doc, setDoc } = window.firebaseFirestore;
+      const ref = doc(window.firebaseDb, 'passometro/clipboard');
+      const text = document.getElementById('clipboard-textarea').value;
+      setDoc(ref, { text, lastUpdate: new Date().toISOString() }, { merge: true })
+        .catch(e => console.error('Error saving clipboard:', e));
+    }
+  }, 1000);
+}
+
+function clipboardSelectAll() {
+  const textarea = document.getElementById('clipboard-textarea');
+  textarea.select();
+  textarea.focus();
+}
+
+function clipboardCopy() {
+  const textarea = document.getElementById('clipboard-textarea');
+  const val = textarea.value;
+  if (!val) return;
+  
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(val).then(() => {
+      document.getElementById('clipboard-status').textContent = 'Copiado!';
+    }).catch(() => { fallbackCopy(textarea); });
+  } else {
+    fallbackCopy(textarea);
+  }
+}
+
+function fallbackCopy(textarea) {
+  textarea.select();
+  document.execCommand('copy');
+  textarea.setSelectionRange(0, 0);
+  document.getElementById('clipboard-status').textContent = 'Copiado!';
+}
+
+function clipboardCut() {
+  const textarea = document.getElementById('clipboard-textarea');
+  const val = textarea.value;
+  if (!val) return;
+
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(val).then(() => {
+      textarea.value = '';
+      onClipboardInput();
+      document.getElementById('clipboard-status').textContent = 'Recortado!';
+    }).catch(() => { fallbackCut(textarea); });
+  } else {
+    fallbackCut(textarea);
+  }
+}
+
+function fallbackCut(textarea) {
+  textarea.select();
+  document.execCommand('cut');
+  onClipboardInput();
+  document.getElementById('clipboard-status').textContent = 'Recortado!';
+}
+
+function clipboardClear() {
+  if (confirm('Tem certeza que deseja apagar todo o texto da área de transferência?')) {
+      const textarea = document.getElementById('clipboard-textarea');
+      textarea.value = '';
+      onClipboardInput();
+      document.getElementById('clipboard-status').textContent = 'Apagado!';
+  }
+}
+
 // ===== INIT =====
 async function initApp() {
   initState();

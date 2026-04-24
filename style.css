@@ -252,6 +252,17 @@ body {
   color: var(--danger);
 }
 
+.btn-clipboard {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #b45309;
+}
+
+.btn-clipboard:hover {
+  background: rgba(245, 158, 11, 0.15);
+  border-color: var(--warning);
+}
+
 /* ===== DASHBOARD (BED GRID) ===== */
 #view-dashboard {
   padding: 24px;
