@@ -2257,6 +2257,12 @@ async function initApp() {
     dateEl.textContent = formatDateBR(new Date());
   }
 
+  // Show Sepse Admin button for Dr. Lauro
+  if (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.email === 'drlauromg@gmail.com.br') {
+      const btnAdmin = document.getElementById('btn-sepse-admin');
+      if (btnAdmin) btnAdmin.style.display = 'inline-block';
+  }
+
   renderDashboard();
 
   // Set default evolution date
@@ -2268,3 +2274,606 @@ async function initApp() {
 
 // Called from index.html after Firebase auth resolves
 window.startApp = initApp;
+
+
+// ===== PROTOCOLO SEPSE (ANDROMEDA-SHOCK-2) =====
+
+var sepse_T0 = new Date();
+var sepse_tecV = null, sepse_pasV = null, sepse_padV = null, sepse_ppV = null, sepse_pamV = null, sepse_fcV = null;
+var sepse_metodoSel = null, sepse_metodoLabel = '', sepse_fluidResp = null, sepse_tecFinal = null;
+var sepse_ecoFE = null, sepse_tierUsado = 1;
+
+function startSepseProtocol() {
+    document.getElementById('protocolos-list').style.display = 'none';
+    document.getElementById('protocolo-sepse-ui').style.display = 'block';
+    
+    // Reset state
+    sepse_T0 = new Date();
+    sepse_tecV = null; sepse_pasV = null; sepse_padV = null; sepse_ppV = null; sepse_pamV = null; sepse_fcV = null;
+    sepse_metodoSel = null; sepse_metodoLabel = ''; sepse_fluidResp = null; sepse_tecFinal = null;
+    sepse_ecoFE = null; sepse_tierUsado = 1;
+    
+    // Reset UI
+    sepseSetP(0);
+    document.getElementById('sepse-progress-label-txt').textContent = 'Etapa 1 de 6+';
+    
+    // Hide/Lock everything except S1
+    ['sepse-s2', 'sepse-s3', 'sepse-s4', 'sepse-s5', 'sepse-s6', 'sepse-s7', 'sepse-s8', 'sepse-sfinal'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) { el.classList.remove('active', 'done'); el.classList.add('locked'); }
+    });
+    
+    ['sepse-s3-vaso', 'sepse-s3-vaso-pad-baixo', 'sepse-s3-vaso-pad-ok', 'sepse-s3-fluid', 'sepse-s6c', 'sepse-s6-fr-sim', 'sepse-s6-fr-nao', 'sepse-tier2-wrap', 'sepse-s8c', 'sepse-s8-dobuta', 'sepse-s8-map', 'sepse-final-direto', 'sepse-sfinal-c'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.classList.add('hidden');
+    });
+    
+    document.getElementById('sepse-s1').classList.remove('done', 'locked');
+    document.getElementById('sepse-s1').classList.add('active');
+    
+    // Clear inputs
+    const inputs = document.querySelectorAll('#protocolo-sepse-ui input, #protocolo-sepse-ui textarea, #protocolo-sepse-ui select');
+    inputs.forEach(i => i.value = '');
+    
+    // Clear results
+    const results = document.querySelectorAll('#protocolo-sepse-ui .calc-result');
+    results.forEach(r => r.classList.add('hidden'));
+    
+    const doneTags = document.querySelectorAll('#protocolo-sepse-ui .done-tag');
+    doneTags.forEach(d => d.classList.add('hidden'));
+}
+
+function closeSepseProtocol() {
+    document.getElementById('protocolo-sepse-ui').style.display = 'none';
+    document.getElementById('protocolos-list').style.display = 'block';
+}
+
+function sepseSetP(n) {
+  document.getElementById('sepse-pfill').style.width = n + '%';
+  document.getElementById('sepse-progress-pct').textContent = n + '%';
+}
+function sepseUnlock(id) {
+  var e = document.getElementById(id);
+  e.classList.remove('locked');
+  e.classList.add('active');
+}
+function sepseMarkDone(id) {
+  var e = document.getElementById(id);
+  e.classList.remove('active');
+  e.classList.add('done');
+}
+
+function sepseCalcTEC() {
+  var v = parseFloat(document.getElementById('sepse-tec-v').value);
+  var box = document.getElementById('sepse-tec-res');
+  if (isNaN(v)) { box.classList.add('hidden'); return; }
+  box.classList.remove('hidden');
+  document.getElementById('sepse-tec-cv').textContent = v.toFixed(1) + 's';
+  var ok = v <= 3;
+  document.getElementById('sepse-tec-ci').textContent = ok
+    ? 'Normal (≤ 3s) — perfusão periférica preservada'
+    : 'Alterado (> 3s) — hipoperfusão periférica presente';
+}
+
+function sepseOk1() {
+  var v = parseFloat(document.getElementById('sepse-tec-v').value);
+  if (isNaN(v)) { alert('Preencha o valor do TEC.'); return; }
+  sepse_tecV = v;
+  document.getElementById('sepse-d1v').textContent = v.toFixed(1) + 's ' + (v <= 3 ? '(normal)' : '(alterado)');
+  document.getElementById('sepse-d1').classList.remove('hidden');
+  sepseMarkDone('sepse-s1'); sepseSetP(15);
+  if (sepse_tecV <= 3) {
+    document.getElementById('sepse-final-direto').classList.remove('hidden');
+    sepseSetP(100);
+  } else {
+    sepseUnlock('sepse-s2');
+  }
+}
+
+function sepseCalcPA() {
+  var s = parseFloat(document.getElementById('sepse-pas').value);
+  var d = parseFloat(document.getElementById('sepse-pad').value);
+  if (isNaN(s) || isNaN(d)) { document.getElementById('sepse-pa-res').classList.add('hidden'); return; }
+  var pp = s - d;
+  document.getElementById('sepse-pa-res').classList.remove('hidden');
+  document.getElementById('sepse-pp-calc').textContent = pp + ' mmHg';
+  document.getElementById('sepse-pad-calc').textContent = d + ' mmHg';
+  document.getElementById('sepse-pa-interp').textContent = pp >= 40
+    ? 'PP ≥ 40 — fenótipo vasoplégico (débito preservado)'
+    : 'PP < 40 — fenótipo hipovolêmico (baixo débito)';
+}
+
+function sepseOk2() {
+  var s = parseFloat(document.getElementById('sepse-pas').value);
+  var d = parseFloat(document.getElementById('sepse-pad').value);
+  if (isNaN(s) || isNaN(d)) { alert('Preencha PAS e PAD.'); return; }
+  sepse_pasV = s; sepse_padV = d; sepse_ppV = s - d;
+  sepse_pamV = parseFloat(document.getElementById('sepse-pam').value) || Math.round(s / 3 + d * 2 / 3);
+  sepse_fcV = parseFloat(document.getElementById('sepse-fc').value) || null;
+  document.getElementById('sepse-d2v').textContent =
+    'PAS ' + s + '/PAD ' + d + ' mmHg | PP ' + sepse_ppV + ' mmHg | PAM ' + sepse_pamV + ' mmHg';
+  document.getElementById('sepse-d2').classList.remove('hidden');
+  sepseMarkDone('sepse-s2'); sepseSetP(30); sepseUnlock('sepse-s3');
+  if (sepse_ppV >= 40) {
+    document.getElementById('sepse-s3-vaso').classList.remove('hidden');
+    if (sepse_padV < 50) document.getElementById('sepse-s3-vaso-pad-baixo').classList.remove('hidden');
+    else document.getElementById('sepse-s3-vaso-pad-ok').classList.remove('hidden');
+  } else {
+    document.getElementById('sepse-s3-fluid').classList.remove('hidden');
+  }
+}
+
+function sepseCalcPADpos() {
+  var v = parseFloat(document.getElementById('sepse-pad-pos').value);
+  if (isNaN(v)) return;
+  document.getElementById('sepse-pad-pos-res').classList.remove('hidden');
+  document.getElementById('sepse-pad-pos-val').textContent = v + ' mmHg';
+  document.getElementById('sepse-pad-pos-interp').textContent = v >= 50
+    ? 'Alvo atingido — reavaliar TEC em 1h'
+    : 'PAD ainda < 50 — considerar nova titulação';
+}
+
+function sepseOk3vaso() {
+  var nePre = document.getElementById('sepse-ne-pre').value || '?';
+  var nePos = document.getElementById('sepse-ne-pos').value || '?';
+  var padPos = document.getElementById('sepse-pad-pos').value || '?';
+  document.getElementById('sepse-d3v').textContent =
+    'Vasoplegia — NE: ' + nePre + '→' + nePos + ' mcg/kg/min | PAD pós: ' + padPos + ' mmHg';
+  document.getElementById('sepse-d3').classList.remove('hidden');
+  sepseMarkDone('sepse-s3'); sepseSetP(50); sepseAbrirS6Vaso();
+}
+
+function sepseOk3vasook() {
+  document.getElementById('sepse-d3v').textContent = 'PP ≥ 40, PAD ≥ 50 — sem vasoplegia. Monitorar.';
+  document.getElementById('sepse-d3').classList.remove('hidden');
+  sepseMarkDone('sepse-s3'); sepseSetP(50); sepseAbrirS6Vaso();
+}
+
+function sepseAbrirS6Vaso() {
+  sepseUnlock('sepse-s6');
+  document.getElementById('sepse-s6c').classList.remove('hidden');
+  document.getElementById('sepse-s6-fr-nao').classList.remove('hidden');
+}
+
+function sepseOk3fluid() {
+  document.getElementById('sepse-d3v').textContent = 'Hipovolemia (PP < 40) — avaliar fluidorresponsividade';
+  document.getElementById('sepse-d3').classList.remove('hidden');
+  sepseMarkDone('sepse-s3'); sepseSetP(45); sepseUnlock('sepse-s4');
+}
+
+function sepseSelM(id, el) {
+  document.querySelectorAll('#protocolo-sepse-ui .option-grid .option-btn').forEach(function(b) { b.classList.remove('selected'); });
+  el.classList.add('selected');
+  sepse_metodoSel = id;
+  document.getElementById('sepse-btn-metodo').classList.remove('hidden');
+}
+
+function sepseOkMetodo() {
+  if (!sepse_metodoSel) return;
+  var lbs = { 'plr-tvi': 'PLR + TVI (eco)', 'vpp': 'VPP', 'plr-pp': 'PLR + PP', 'mini': 'Mini-bolus 100 mL' };
+  sepse_metodoLabel = lbs[sepse_metodoSel];
+  document.getElementById('sepse-d4v').textContent = sepse_metodoLabel;
+  document.getElementById('sepse-d4').classList.remove('hidden');
+  sepseMarkDone('sepse-s4'); sepseSetP(58); sepseUnlock('sepse-s5');
+  sepseRenderS5();
+}
+
+function sepseRenderS5() {
+  var c = document.getElementById('sepse-s5c');
+  var t = document.getElementById('sepse-s5t');
+  if (sepse_metodoSel === 'plr-tvi') {
+    t.textContent = 'PLR + variação de TVI ao ecocardiograma';
+    c.innerHTML =
+      '<div class="step-desc">Decúbito dorsal, MMII elevados a 45° por 60–90 s. Medir TVI via Doppler pulsátil na VSVE antes e durante a manobra.</div>' +
+      '<div class="alert alert-info">Variação de TVI ≥ 15% (fórmula ANDROMEDA) → fluidorresponsivo.</div>' +
+      '<div class="field-row">' +
+        '<div class="field-group"><label>TVI basal (cm) — antes do PLR</label><input type="number" id="sepse-tvi-pre" step="0.1" min="0" placeholder="ex: 16,0" oninput="sepseCTVI()"></div>' +
+        '<div class="field-group"><label>TVI durante PLR (cm)</label><input type="number" id="sepse-tvi-pos" step="0.1" min="0" placeholder="ex: 19,0" oninput="sepseCTVI()"></div>' +
+      '</div>' +
+      '<div class="calc-result hidden" id="sepse-tvi-calc">' +
+        '<div><div class="calc-item-label">Variação TVI</div><div class="calc-item-val" id="sepse-tvi-dv">—</div></div>' +
+        '<div class="calc-item-interp" id="sepse-tvi-di">—</div>' +
+      '</div>' +
+      '<div class="btn-row"><button class="btn-marsala" onclick="sepseOkFR()">Confirmar resultado</button></div>';
+  } else if (sepse_metodoSel === 'vpp') {
+    t.textContent = 'Variação de Pressão de Pulso (VPP)';
+    c.innerHTML =
+      '<div class="alert alert-warning">Válido apenas em VM controlada, sem esforço espontâneo. VT ≥ 8 mL/kg PBW. Ritmo sinusal.</div>' +
+      '<div class="field-row">' +
+        '<div class="field-group"><label>VPP calculada (%)</label><input type="number" id="sepse-vpp-v" min="0" max="60" placeholder="ex: 15" oninput="sepseCVPP()"></div>' +
+        '<div class="field-group"><label>Volume corrente (mL/kg PBW)</label><input type="number" id="sepse-vt-v" min="0" placeholder="ex: 8"></div>' +
+      '</div>' +
+      '<div class="calc-result hidden" id="sepse-vpp-calc">' +
+        '<div><div class="calc-item-label">VPP</div><div class="calc-item-val" id="sepse-vpp-cv">—</div></div>' +
+        '<div class="calc-item-interp" id="sepse-vpp-ci">—</div>' +
+      '</div>' +
+      '<div class="btn-row"><button class="btn-marsala" onclick="sepseOkFR()">Confirmar resultado</button></div>';
+  } else if (sepse_metodoSel === 'plr-pp') {
+    t.textContent = 'PLR + variação de Pressão de Pulso';
+    c.innerHTML =
+      '<div class="step-desc">Elevação dos MMII a 45° por 60–90 s. Registrar PA invasiva ou automática antes e durante a manobra.</div>' +
+      '<div class="field-row">' +
+        '<div class="field-group"><label>PP basal (mmHg)</label><input type="number" id="sepse-pp-pre" min="0" placeholder="ex: 35" oninput="sepseCPPlr()"></div>' +
+        '<div class="field-group"><label>PP durante PLR (mmHg)</label><input type="number" id="sepse-pp-plr" min="0" placeholder="ex: 42" oninput="sepseCPPlr()"></div>' +
+      '</div>' +
+      '<div class="calc-result hidden" id="sepse-pplr-calc">' +
+        '<div><div class="calc-item-label">Variação PP</div><div class="calc-item-val" id="sepse-pplr-cv">—</div></div>' +
+        '<div class="calc-item-interp" id="sepse-pplr-ci">—</div>' +
+      '</div>' +
+      '<div class="btn-row"><button class="btn-marsala" onclick="sepseOkFR()">Confirmar resultado</button></div>';
+  } else if (sepse_metodoSel === 'mini') {
+    t.textContent = 'Mini-bolus 100 mL em 1 minuto';
+    c.innerHTML =
+      '<div class="step-desc">Infundir 100 mL de cristaloide em 1 min. Medir parâmetro de débito cardíaco antes e imediatamente após.</div>' +
+      '<div class="field-row">' +
+        '<div class="field-group"><label>Parâmetro antes (ex: TVI 16 cm)</label><input type="text" id="sepse-mb-pre" placeholder="ex: TVI 16 cm"></div>' +
+        '<div class="field-group"><label>Parâmetro após</label><input type="text" id="sepse-mb-pos" placeholder="ex: TVI 19 cm"></div>' +
+      '</div>' +
+      '<div class="field-row single"><div class="field-group"><label>Variação calculada (%)</label><input type="number" id="sepse-mb-var" step="0.1" oninput="sepseCMB()"></div></div>' +
+      '<div class="calc-result hidden" id="sepse-mb-calc">' +
+        '<div><div class="calc-item-label">Variação</div><div class="calc-item-val" id="sepse-mb-cv">—</div></div>' +
+        '<div class="calc-item-interp" id="sepse-mb-ci">—</div>' +
+      '</div>' +
+      '<div class="btn-row"><button class="btn-marsala" onclick="sepseOkFR()">Confirmar resultado</button></div>';
+  }
+}
+
+function sepseCTVI() {
+  var a = parseFloat(document.getElementById('sepse-tvi-pre').value);
+  var b = parseFloat(document.getElementById('sepse-tvi-pos').value);
+  if (isNaN(a) || isNaN(b) || a === 0) return;
+  var d = ((b - a) / ((b + a) / 2) * 100);
+  document.getElementById('sepse-tvi-calc').classList.remove('hidden');
+  document.getElementById('sepse-tvi-dv').textContent = d.toFixed(1) + '%';
+  sepse_fluidResp = d >= 15;
+  document.getElementById('sepse-tvi-di').textContent = sepse_fluidResp
+    ? 'Fluidorresponsivo (variação ≥ 15%)'
+    : 'Não fluidorresponsivo (variação < 15%)';
+}
+function sepseCVPP() {
+  var v = parseFloat(document.getElementById('sepse-vpp-v').value);
+  if (isNaN(v)) return;
+  sepse_fluidResp = v >= 13;
+  document.getElementById('sepse-vpp-calc').classList.remove('hidden');
+  document.getElementById('sepse-vpp-cv').textContent = v.toFixed(0) + '%';
+  document.getElementById('sepse-vpp-ci').textContent = sepse_fluidResp
+    ? 'Fluidorresponsivo (VPP ≥ 13%)'
+    : 'Não fluidorresponsivo (VPP < 13%)';
+}
+function sepseCPPlr() {
+  var a = parseFloat(document.getElementById('sepse-pp-pre').value);
+  var b = parseFloat(document.getElementById('sepse-pp-plr').value);
+  if (isNaN(a) || isNaN(b) || a === 0) return;
+  var d = ((b - a) / a * 100);
+  document.getElementById('sepse-pplr-calc').classList.remove('hidden');
+  document.getElementById('sepse-pplr-cv').textContent = d.toFixed(1) + '%';
+  sepse_fluidResp = d >= 10;
+  document.getElementById('sepse-pplr-ci').textContent = sepse_fluidResp
+    ? 'Fluidorresponsivo (variação ≥ 10%)'
+    : 'Não fluidorresponsivo (variação < 10%)';
+}
+function sepseCMB() {
+  var v = parseFloat(document.getElementById('sepse-mb-var').value);
+  if (isNaN(v)) return;
+  sepse_fluidResp = v >= 10;
+  document.getElementById('sepse-mb-calc').classList.remove('hidden');
+  document.getElementById('sepse-mb-cv').textContent = v.toFixed(1) + '%';
+  document.getElementById('sepse-mb-ci').textContent = sepse_fluidResp
+    ? 'Fluidorresponsivo (variação ≥ 10%)'
+    : 'Não fluidorresponsivo';
+}
+
+function sepseOkFR() {
+  if (sepse_fluidResp === null) { alert('Calcule o resultado primeiro preenchendo os campos.'); return; }
+  var lbl = sepse_fluidResp ? 'Fluidorresponsivo' : 'Não fluidorresponsivo';
+  document.getElementById('sepse-d5v').textContent = sepse_metodoLabel + ' — ' + lbl;
+  document.getElementById('sepse-d5').classList.remove('hidden');
+  sepseMarkDone('sepse-s5'); sepseSetP(70); sepseUnlock('sepse-s6');
+  document.getElementById('sepse-s6c').classList.remove('hidden');
+  if (sepse_fluidResp) document.getElementById('sepse-s6-fr-sim').classList.remove('hidden');
+  else document.getElementById('sepse-s6-fr-nao').classList.remove('hidden');
+}
+
+function sepseCalcTEC2() {
+  var v = parseFloat(document.getElementById('sepse-tec2-v').value);
+  if (isNaN(v)) return;
+  document.getElementById('sepse-tec2-res').classList.remove('hidden');
+  document.getElementById('sepse-tec2-cv').textContent = v.toFixed(1) + 's';
+  document.getElementById('sepse-tec2-ci').textContent = v <= 3
+    ? 'TEC normalizado — perfusão periférica preservada'
+    : 'TEC ainda alterado — considerar Tier 2';
+}
+
+function sepseOkS6() {
+  var v = parseFloat(document.getElementById('sepse-tec2-v').value);
+  if (isNaN(v)) { alert('Registre o TEC de reavaliação.'); return; }
+  sepse_tecFinal = v;
+  document.getElementById('sepse-d6v').textContent =
+    'TEC pós-intervenção: ' + v.toFixed(1) + 's — ' + (v <= 3 ? 'normalizado' : 'ainda alterado');
+  document.getElementById('sepse-d6').classList.remove('hidden');
+  sepseMarkDone('sepse-s6'); sepseSetP(82);
+  if (v <= 3) {
+    document.getElementById('sepse-final-direto').classList.remove('hidden');
+    sepseSetP(100);
+  } else {
+    sepse_tierUsado = 2;
+    document.getElementById('sepse-tier2-wrap').classList.remove('hidden');
+    sepseUnlock('sepse-s7');
+  }
+}
+
+function sepseInterpretEco() {
+  var fe = parseFloat(document.getElementById('sepse-fe').value);
+  var tapse = parseFloat(document.getElementById('sepse-tapse').value);
+  var vciCol = document.getElementById('sepse-vci-col').value;
+  var wrap = document.getElementById('sepse-eco-interp-wrap');
+  var msgs = [];
+  if (!isNaN(fe)) {
+    if (fe < 35) msgs.push('<div class="alert alert-danger"><strong>FE ' + fe + '%</strong> — disfunção sistólica VE grave. Considerar dobutamina.</div>');
+    else if (fe < 50) msgs.push('<div class="alert alert-warning"><strong>FE ' + fe + '%</strong> — disfunção sistólica VE moderada.</div>');
+    else msgs.push('<div class="alert alert-success"><strong>FE ' + fe + '%</strong> — função sistólica VE preservada.</div>');
+  }
+  if (!isNaN(tapse)) {
+    if (tapse < 16) msgs.push('<div class="alert alert-danger"><strong>TAPSE ' + tapse + ' mm</strong> — disfunção sistólica VD.</div>');
+    else msgs.push('<div class="alert alert-success"><strong>TAPSE ' + tapse + ' mm</strong> — função sistólica VD preservada.</div>');
+  }
+  if (vciCol === 'lt20') msgs.push('<div class="alert alert-warning">VCI não colapsável — cautela com expansão volêmica.</div>');
+  if (vciCol === 'gt50') msgs.push('<div class="alert alert-info">VCI muito colapsável — sugere hipovolemia relativa.</div>');
+  if (msgs.length > 0) {
+    wrap.classList.remove('hidden');
+    wrap.innerHTML = msgs.join('');
+  } else {
+    wrap.classList.add('hidden');
+  }
+}
+
+function sepseOkS7() {
+  sepse_ecoFE = parseFloat(document.getElementById('sepse-fe').value);
+  document.getElementById('sepse-d7').classList.remove('hidden');
+  sepseMarkDone('sepse-s7'); sepseSetP(92); sepseUnlock('sepse-s8');
+  document.getElementById('sepse-s8c').classList.remove('hidden');
+  if (!isNaN(sepse_ecoFE) && sepse_ecoFE < 50) document.getElementById('sepse-s8-dobuta').classList.remove('hidden');
+  else document.getElementById('sepse-s8-map').classList.remove('hidden');
+}
+
+function sepseGerarTexto(conduta) {
+  var agora = new Date();
+  var dur = Math.round((agora - sepse_T0) / 60000);
+  
+  const bed = state.beds[state.currentBed];
+  var pac = bed && bed.name ? `Leito ${bed.number} — ${bed.name}` : 'Paciente Não Identificado';
+  var med = window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.email ? window.firebaseAuth.currentUser.email.split('@')[0] : 'Dr(a). Plantonista';
+
+  var t = '📋 PROTOCOLO DE SEPSE — ANDROMEDA-SHOCK-2 (CRT-PHR)\n';
+  t += 'Paciente: ' + pac + '\n';
+  t += 'Médico: ' + med + '\n';
+  t += 'Início: ' + sepse_T0.toLocaleString('pt-BR') + ' | Duração: ' + dur + ' min\n\n';
+  t += '─────────────────────────\n';
+  t += 'AVALIAÇÃO INICIAL\n';
+  t += 'TEC basal: ' + sepse_tecV.toFixed(1) + 's ' + (sepse_tecV > 3 ? '(alterado — hipoperfusão periférica)' : '(normal)') + '\n';
+
+  if (sepse_pasV) {
+    t += 'PA: ' + sepse_pasV + '/' + sepse_padV + ' mmHg | PP: ' + sepse_ppV + ' mmHg | PAM: ' + sepse_pamV + ' mmHg';
+    if (sepse_fcV) t += ' | FC: ' + sepse_fcV + ' bpm';
+    t += '\n';
+    t += 'Fenótipo: ' + (sepse_ppV >= 40 ? 'vasoplégico (PP ≥ 40)' : 'hipovolêmico (PP < 40)') + '\n';
+  }
+
+  if (sepse_tecV <= 3) {
+    t += '\nCONCLUSÃO\nTEC normal — protocolo de ressuscitação guiada não indicado.\n';
+  } else {
+    t += '\nTIER 1\n';
+    if (sepse_ppV >= 40) {
+      var nePre = document.getElementById('sepse-ne-pre') ? document.getElementById('sepse-ne-pre').value : '';
+      var nePos = document.getElementById('sepse-ne-pos') ? document.getElementById('sepse-ne-pos').value : '';
+      var padPosV = document.getElementById('sepse-pad-pos') ? document.getElementById('sepse-pad-pos').value : '';
+      t += 'Conduta: titulação de noradrenalina (alvo PAD > 50 mmHg)\n';
+      if (nePre || nePos) t += 'NE: ' + nePre + ' → ' + nePos + ' mcg/kg/min\n';
+      if (padPosV) t += 'PAD pós-titulação: ' + padPosV + ' mmHg\n';
+    } else {
+      t += 'Avaliação de fluidorresponsividade — método: ' + sepse_metodoLabel + '\n';
+      t += 'Resultado: ' + (sepse_fluidResp ? 'fluidorresponsivo' : 'não fluidorresponsivo') + '\n';
+      if (sepse_metodoSel === 'plr-tvi') {
+        var a = document.getElementById('sepse-tvi-pre') ? document.getElementById('sepse-tvi-pre').value : '';
+        var b = document.getElementById('sepse-tvi-pos') ? document.getElementById('sepse-tvi-pos').value : '';
+        if (a && b && parseFloat(a) > 0) {
+          var d = ((parseFloat(b) - parseFloat(a)) / ((parseFloat(b) + parseFloat(a)) / 2) * 100);
+          t += 'TVI: ' + a + ' → ' + b + ' cm (variação ' + d.toFixed(1) + '%)\n';
+        }
+      } else if (sepse_metodoSel === 'vpp') {
+        var vv = document.getElementById('sepse-vpp-v') ? document.getElementById('sepse-vpp-v').value : '';
+        var vt = document.getElementById('sepse-vt-v') ? document.getElementById('sepse-vt-v').value : '';
+        if (vv) t += 'VPP: ' + vv + '%' + (vt ? ' | VT: ' + vt + ' mL/kg' : '') + '\n';
+      } else if (sepse_metodoSel === 'plr-pp') {
+        var pp1 = document.getElementById('sepse-pp-pre') ? document.getElementById('sepse-pp-pre').value : '';
+        var pp2 = document.getElementById('sepse-pp-plr') ? document.getElementById('sepse-pp-plr').value : '';
+        if (pp1 && pp2 && parseFloat(pp1) > 0) {
+          var dpP = ((parseFloat(pp2) - parseFloat(pp1)) / parseFloat(pp1) * 100);
+          t += 'PP: ' + pp1 + ' → ' + pp2 + ' mmHg (variação ' + dpP.toFixed(1) + '%)\n';
+        }
+      } else if (sepse_metodoSel === 'mini') {
+        var mb1 = document.getElementById('sepse-mb-pre') ? document.getElementById('sepse-mb-pre').value : '';
+        var mb2 = document.getElementById('sepse-mb-pos') ? document.getElementById('sepse-mb-pos').value : '';
+        var mbVar = document.getElementById('sepse-mb-var') ? document.getElementById('sepse-mb-var').value : '';
+        if (mb1 || mb2) t += 'Mini-bolus: ' + mb1 + ' → ' + mb2 + (mbVar ? ' (variação ' + mbVar + '%)' : '') + '\n';
+      }
+      var sv = document.getElementById('sepse-sol-v') ? document.getElementById('sepse-sol-v').value : '';
+      var st = document.getElementById('sepse-sol-t') ? document.getElementById('sepse-sol-t').value : '';
+      if (sepse_fluidResp && sv) t += 'Expansão realizada: ' + sv + (st ? ' em ' + st : '') + '\n';
+    }
+    if (sepse_tecFinal !== null) {
+      t += 'TEC pós-Tier 1: ' + sepse_tecFinal.toFixed(1) + 's ' +
+        (sepse_tecFinal <= 3 ? '(normalizado)' : '(persistente — Tier 2 iniciado)') + '\n';
+    }
+    if (sepse_tierUsado === 2) {
+      t += '\nTIER 2\n';
+      var fe = document.getElementById('sepse-fe') ? document.getElementById('sepse-fe').value : '';
+      var tapse = document.getElementById('sepse-tapse') ? document.getElementById('sepse-tapse').value : '';
+      var tvi2 = document.getElementById('sepse-tvi-t2') ? document.getElementById('sepse-tvi-t2').value : '';
+      var vdDil = document.getElementById('sepse-vd-dil') ? document.getElementById('sepse-vd-dil').value : '';
+      var vciCol2 = document.getElementById('sepse-vci-col') ? document.getElementById('sepse-vci-col').value : '';
+      var dsign = document.getElementById('sepse-dsign') ? document.getElementById('sepse-dsign').value : '';
+      var derp = document.getElementById('sepse-derp') ? document.getElementById('sepse-derp').value : '';
+      var ecoObs = document.getElementById('sepse-eco-obs') ? document.getElementById('sepse-eco-obs').value : '';
+      t += 'Ecocardiografia:\n';
+      if (fe) t += '  FE: ' + fe + '%\n';
+      if (tvi2) t += '  TVI: ' + tvi2 + ' cm\n';
+      if (tapse) t += '  TAPSE: ' + tapse + ' mm\n';
+      if (vdDil && vdDil !== 'nao') t += '  VD: ' + vdDil + '\n';
+      if (vciCol2) t += '  VCI: colapsabilidade ' + vciCol2 + '\n';
+      if (dsign === 'sim') t += '  D-sign: presente\n';
+      if (derp !== 'ausente') t += '  Derrame pericárdico: ' + derp + '\n';
+      if (ecoObs) t += '  Obs: ' + ecoObs + '\n';
+      var dobDose = document.getElementById('sepse-dobuta-dose') ? document.getElementById('sepse-dobuta-dose').value : '';
+      var dobHora = document.getElementById('sepse-dobuta-hora') ? document.getElementById('sepse-dobuta-hora').value : '';
+      var mapAlvo = document.getElementById('sepse-map-alvo') ? document.getElementById('sepse-map-alvo').value : '';
+      var mapNe = document.getElementById('sepse-map-ne') ? document.getElementById('sepse-map-ne').value : '';
+      if (dobDose) t += 'Dobutamina: ' + dobDose + ' mcg/kg/min' + (dobHora ? ' — início ' + dobHora : '') + '\n';
+      if (mapAlvo) t += 'Teste PAM elevada: alvo ' + mapAlvo + ' mmHg' + (mapNe ? ' | NE: ' + mapNe + ' mcg/kg/min' : '') + '\n';
+      var tec3 = document.getElementById('sepse-tec3-v') ? document.getElementById('sepse-tec3-v').value : '';
+      if (tec3) t += 'TEC pós-Tier 2: ' + tec3 + 's\n';
+    }
+  }
+
+  if (conduta) t += '\nCONDUTA FINAL\n' + conduta + '\n';
+  t += '\n[Protocolo gerado pelo Passômetro HSJ · ' + agora.toLocaleString('pt-BR') + ']';
+  return t;
+}
+
+function sepseMostrarFinal(texto) {
+  sepseSetP(100);
+  document.getElementById('sepse-texto-ev').textContent = texto;
+  
+  var sf = document.getElementById('sepse-sfinal');
+  sf.classList.remove('locked'); sf.classList.add('active');
+  document.getElementById('sepse-sfinal-c').classList.remove('hidden');
+  setTimeout(function() { sf.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 150);
+}
+
+async function sepseSalvarFirestore(textoGerado) {
+    if (!window.firebaseDb || !window.firebaseFirestore || !window.firebaseAuth?.currentUser) return;
+    const { collection, setDoc, doc } = window.firebaseFirestore;
+    
+    try {
+        const bed = state.beds[state.currentBed];
+        const pacId = bed ? `leito_${bed.number}` : 'desconhecido';
+        const pacNome = bed && bed.name ? bed.name : 'Desconhecido';
+        const user = window.firebaseAuth.currentUser;
+        
+        const now = new Date();
+        const duration = Math.round((now - sepse_T0) / 60000);
+        
+        const data = {
+            paciente_id: pacId,
+            paciente_nome: pacNome,
+            leito: bed ? bed.number.toString() : '?',
+            medico_uid: user.uid,
+            medico_nome: user.email,
+            timestamp_inicio: sepse_T0.toISOString(),
+            timestamp_fim: now.toISOString(),
+            duracao_minutos: duration,
+            tec_inicial: sepse_tecV,
+            pp_inicial: sepse_ppV,
+            fenotipo: sepse_ppV !== null ? (sepse_ppV >= 40 ? 'vasoplégico' : 'hipovolêmico') : 'normal',
+            metodo_fr: sepse_metodoLabel,
+            resultado_fr: sepse_fluidResp === null ? 'não avaliado' : (sepse_fluidResp ? 'fluidorresponsivo' : 'não fluidorresponsivo'),
+            tier_atingido: sepse_tierUsado,
+            tec_final: sepse_tecFinal || sepse_tecV,
+            desfecho_tec: (sepse_tecFinal !== null ? (sepse_tecFinal <= 3 ? 'normalizado' : 'persistente') : (sepse_tecV <= 3 ? 'normalizado' : 'não avaliado')),
+            fe_eco: sepse_ecoFE,
+            dobutamina_usada: document.getElementById('sepse-dobuta-dose') ? !!document.getElementById('sepse-dobuta-dose').value : false,
+            texto_evolucao: textoGerado
+        };
+        
+        const newDocRef = doc(collection(window.firebaseDb, 'protocolos_sepse'));
+        await setDoc(newDocRef, data);
+        console.log('[SEPSE] Protocolo salvo no Firestore com sucesso.');
+    } catch (e) {
+        console.error('[SEPSE] Erro ao salvar protocolo:', e);
+    }
+}
+
+function sepseFinalizarDireto() {
+  var c = document.getElementById('sepse-conduta-direto').value;
+  var txt = sepseGerarTexto(c);
+  sepseMostrarFinal(txt);
+  sepseSalvarFirestore(txt);
+}
+function sepseFinalizar() {
+  var c = document.getElementById('sepse-conduta-final').value;
+  var txt = sepseGerarTexto(c);
+  sepseMostrarFinal(txt);
+  sepseSalvarFirestore(txt);
+}
+
+function sepseCopiar() {
+  var t = document.getElementById('sepse-texto-ev').textContent;
+  navigator.clipboard.writeText(t).then(function() {
+    var ok = document.getElementById('sepse-cok');
+    ok.style.display = 'inline';
+    setTimeout(function() { ok.style.display = 'none'; }, 2500);
+  });
+}
+
+// ===== SEPSE ADMIN PANEL =====
+
+function openSepseAdmin() {
+    document.getElementById('sepse-admin-modal').style.display = 'flex';
+    loadSepseAdminData();
+}
+
+function closeSepseAdmin() {
+    document.getElementById('sepse-admin-modal').style.display = 'none';
+}
+
+async function loadSepseAdminData() {
+    if (!window.firebaseDb || !window.firebaseFirestore) return;
+    const tbody = document.getElementById('sepse-admin-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">Carregando protocolos...</td></tr>';
+    
+    try {
+        const { collection, getDocs, query, orderBy } = window.firebaseFirestore;
+        const q = query(collection(window.firebaseDb, 'protocolos_sepse'), orderBy('timestamp_fim', 'desc'));
+        const querySnapshot = await getDocs(q);
+        
+        let total = 0;
+        let normalizados = 0;
+        let tier2 = 0;
+        let html = '';
+        
+        querySnapshot.forEach((doc) => {
+            const data = doc.data();
+            total++;
+            if (data.desfecho_tec === 'normalizado') normalizados++;
+            if (data.tier_atingido === 2) tier2++;
+            
+            const dateStr = new Date(data.timestamp_fim).toLocaleString('pt-BR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+            const medNome = data.medico_nome.split('@')[0];
+            const resultFR = data.resultado_fr === 'não avaliado' ? '-' : (data.resultado_fr === 'fluidorresponsivo' ? 'Sim' : 'Não');
+            
+            html += `<tr>
+                <td>${dateStr}</td>
+                <td>L${data.leito} - ${data.paciente_nome.substring(0, 15)}</td>
+                <td>${medNome}</td>
+                <td><span style="text-transform:capitalize;">${data.fenotipo}</span></td>
+                <td>${resultFR}</td>
+                <td><span style="color:${data.desfecho_tec === 'normalizado' ? 'var(--success)' : (data.desfecho_tec === 'persistente' ? 'var(--danger)' : 'var(--text-muted)')}; font-weight:600; text-transform:capitalize;">${data.desfecho_tec}</span></td>
+            </tr>`;
+        });
+        
+        document.getElementById('sepse-metric-total').textContent = total;
+        document.getElementById('sepse-metric-norm').textContent = total > 0 ? Math.round((normalizados / total) * 100) + '%' : '0%';
+        document.getElementById('sepse-metric-tier2').textContent = total > 0 ? Math.round((tier2 / total) * 100) + '%' : '0%';
+        
+        if (total === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">Nenhum protocolo registrado.</td></tr>';
+        } else {
+            tbody.innerHTML = html;
+        }
+        
+    } catch(e) {
+        console.error('Erro ao buscar admin sepse:', e);
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:var(--danger);">Erro ao carregar dados.</td></tr>';
+    }
+}
+

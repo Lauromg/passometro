@@ -44,6 +44,7 @@
             <div class="header-right">
                 <span class="header-date" id="header-date"></span>
 
+                <button class="btn-header btn-sepse-admin" id="btn-sepse-admin" onclick="openSepseAdmin()" style="display:none; background:var(--marsala); color:#fff; border:none;">🫀 Painel Sepse</button>
                 <button class="btn-header btn-clipboard" onclick="openClipboard()">📋 Área de Transferência</button>
                 <button class="btn-header btn-print" onclick="printPassometro()">🖨️ Imprimir</button>
                 <button class="btn-header btn-logout" onclick="logout()">Sair</button>
@@ -110,6 +111,7 @@
                     Drogas</button>
                 <button class="tab-btn" data-tab="exames" onclick="switchTab('exames')">📊 Exames</button>
                 <button class="tab-btn" data-tab="balanco" onclick="switchTab('balanco')">💧 Balanço</button>
+                <button class="tab-btn" data-tab="protocolos" onclick="switchTab('protocolos')" style="color: var(--marsala); border-bottom-color: var(--marsala);">🫀 Protocolos</button>
             </div>
 
             <!-- Tab Contents -->
@@ -268,6 +270,376 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
                 </div>
             </div>
 
+            <!-- PROTOCOLOS -->
+            <div class="tab-content" id="tab-protocolos">
+                <div class="section-card" id="protocolos-list">
+                    <h3>🫀 Protocolos Clínicos</h3>
+                    <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Selecione um protocolo interativo para guiar a conduta e gerar texto para evolução.</p>
+                    <div class="devices-grid">
+                        <div class="device-card" style="cursor:pointer; border-color:var(--marsala);" onclick="startSepseProtocol()">
+                            <div class="device-card-header">
+                                <span style="font-size:24px;">🫀</span>
+                                <div>
+                                    <div class="device-name" style="color:var(--marsala);">Protocolo de Sepse</div>
+                                    <div style="font-size:11px;color:var(--text-muted);">ANDROMEDA-SHOCK-2 (CRT-PHR)</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEPSE PROTOCOL UI -->
+                <div id="protocolo-sepse-ui" style="display:none; max-width: 720px; margin: 0 auto;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                        <div>
+                            <h2 style="color:var(--marsala); margin:0;">Protocolo de Sepse</h2>
+                            <p style="font-size:12px; color:var(--text-muted); margin:0;">ANDROMEDA-SHOCK-2 · CRT-PHR</p>
+                        </div>
+                        <button class="btn btn-ghost" onclick="closeSepseProtocol()">✕ Fechar</button>
+                    </div>
+
+                    <!-- PROGRESS -->
+                    <div class="progress-wrap">
+                        <div class="progress-label">
+                        <span id="sepse-progress-label-txt">Etapa 1 de 6+</span>
+                        <span id="sepse-progress-pct">0%</span>
+                        </div>
+                        <div class="progress-track">
+                        <div class="progress-fill" id="sepse-pfill" style="width:0%"></div>
+                        </div>
+                    </div>
+
+                    <!-- ─── ETAPA 1: TEC ─── -->
+                    <div class="step-card active" id="sepse-s1">
+                        <div class="step-header">
+                        <div class="step-num">1</div>
+                        <div class="step-title">TEC — Tempo de Enchimento Capilar</div>
+                        </div>
+                        <div class="step-desc">
+                        Pressionar a polpa do dedo indicador com lâmina de vidro por 10 segundos. Medir o tempo de retorno da cor com cronômetro. Repetir 3x e usar a mediana.
+                        </div>
+                        <div class="field-row">
+                        <div class="field-group">
+                            <label>TEC medido (segundos)</label>
+                            <input type="number" id="sepse-tec-v" min="0" max="15" step="0.5" placeholder="ex: 4,0" oninput="sepseCalcTEC()">
+                        </div>
+                        <div class="field-group">
+                            <label>Hora da medição</label>
+                            <input type="time" id="sepse-tec-hora">
+                        </div>
+                        </div>
+                        <div class="calc-result hidden" id="sepse-tec-res">
+                        <div>
+                            <div class="calc-item-label">TEC</div>
+                            <div class="calc-item-val" id="sepse-tec-cv">—</div>
+                        </div>
+                        <div class="calc-item-interp" id="sepse-tec-ci">—</div>
+                        </div>
+                        <div class="btn-row">
+                        <button class="btn-marsala" onclick="sepseOk1()">Confirmar TEC</button>
+                        </div>
+                        <div class="done-tag hidden" id="sepse-d1">✓ TEC registrado: <span id="sepse-d1v"></span></div>
+                    </div>
+                    <div class="connector"></div>
+
+                    <!-- ─── ETAPA 2: PA ─── -->
+                    <div class="step-card locked" id="sepse-s2">
+                        <div class="step-header">
+                        <div class="step-num">2</div>
+                        <div class="step-title">Pressão Arterial e Fenótipo Hemodinâmico</div>
+                        </div>
+                        <div class="step-desc">
+                        Registre a PA atual. A <strong>pressão de pulso (PP = PAS − PAD)</strong> definirá o fenótipo hemodinâmico. A <strong>PAD</strong> guiará a decisão sobre vasopressor.
+                        </div>
+                        <div class="field-row">
+                        <div class="field-group"><label>PAS (mmHg)</label><input type="number" id="sepse-pas" min="0" max="300" placeholder="ex: 90" oninput="sepseCalcPA()"></div>
+                        <div class="field-group"><label>PAD (mmHg)</label><input type="number" id="sepse-pad" min="0" max="200" placeholder="ex: 45" oninput="sepseCalcPA()"></div>
+                        </div>
+                        <div class="field-row">
+                        <div class="field-group"><label>PAM (mmHg)</label><input type="number" id="sepse-pam" min="0" max="200" placeholder="ex: 60"></div>
+                        <div class="field-group"><label>FC (bpm)</label><input type="number" id="sepse-fc" min="0" max="300" placeholder="ex: 112"></div>
+                        </div>
+                        <div class="calc-result hidden" id="sepse-pa-res">
+                        <div>
+                            <div class="calc-item-label">Pressão de Pulso</div>
+                            <div class="calc-item-val" id="sepse-pp-calc">—</div>
+                        </div>
+                        <div>
+                            <div class="calc-item-label">PAD</div>
+                            <div class="calc-item-val" id="sepse-pad-calc">—</div>
+                        </div>
+                        <div class="calc-item-interp" id="sepse-pa-interp">—</div>
+                        </div>
+                        <div class="btn-row">
+                        <button class="btn-marsala" onclick="sepseOk2()">Confirmar PA</button>
+                        </div>
+                        <div class="done-tag hidden" id="sepse-d2">✓ <span id="sepse-d2v"></span></div>
+                    </div>
+                    <div class="connector"></div>
+
+                    <!-- ─── ETAPA 3: FENÓTIPO ─── -->
+                    <div class="step-card locked" id="sepse-s3">
+                        <div class="step-header">
+                        <div class="step-num">3</div>
+                        <div class="step-title">Fenótipo Hemodinâmico — Via do Tier 1</div>
+                        </div>
+                        <!-- VASOPLÉGICO -->
+                        <div id="sepse-s3-vaso" class="hidden">
+                        <div class="alert alert-warning"><strong>PP ≥ 40 mmHg</strong> — débito cardíaco provavelmente preservado. Avaliar PAD para identificar vasoplegia.</div>
+                        <div id="sepse-s3-vaso-pad-baixo" class="hidden">
+                            <div class="alert alert-danger"><strong>PAD &lt; 50 mmHg</strong> — vasoplegia presente. Titular noradrenalina para alvo de PAD &gt; 50 mmHg.</div>
+                            <div class="field-row">
+                            <div class="field-group"><label>Dose NE atual (mcg/kg/min)</label><input type="number" id="sepse-ne-pre" step="0.01" min="0" placeholder="ex: 0,15"></div>
+                            <div class="field-group"><label>Nova dose NE após titulação</label><input type="number" id="sepse-ne-pos" step="0.01" min="0" placeholder="ex: 0,25"></div>
+                            </div>
+                            <div class="field-row">
+                            <div class="field-group"><label>PAD após titulação (mmHg)</label><input type="number" id="sepse-pad-pos" placeholder="ex: 54" oninput="sepseCalcPADpos()"></div>
+                            <div class="field-group"></div>
+                            </div>
+                            <div class="calc-result hidden" id="sepse-pad-pos-res">
+                            <div>
+                                <div class="calc-item-label">PAD pós-NE</div>
+                                <div class="calc-item-val" id="sepse-pad-pos-val">—</div>
+                            </div>
+                            <div class="calc-item-interp" id="sepse-pad-pos-interp">—</div>
+                            </div>
+                            <div class="btn-row">
+                            <button class="btn-marsala" onclick="sepseOk3vaso()">Registrar e reavaliar TEC</button>
+                            </div>
+                        </div>
+                        <div id="sepse-s3-vaso-pad-ok" class="hidden">
+                            <div class="alert alert-success"><strong>PAD ≥ 50 mmHg</strong> — sem vasoplegia. Manter NE atual e reavaliar TEC em 1 hora.</div>
+                            <div class="btn-row"><button class="btn-marsala" onclick="sepseOk3vasook()">Registrar</button></div>
+                        </div>
+                        </div>
+                        <!-- HIPOVOLÊMICO -->
+                        <div id="sepse-s3-fluid" class="hidden">
+                        <div class="alert alert-info"><strong>PP &lt; 40 mmHg</strong> — fenótipo hipovolêmico. Avaliar fluidorresponsividade antes de qualquer expansão volêmica.</div>
+                        <div class="btn-row"><button class="btn-marsala" onclick="sepseOk3fluid()">Avaliar fluidorresponsividade</button></div>
+                        </div>
+                        <div class="done-tag hidden" id="sepse-d3">✓ Fenótipo: <span id="sepse-d3v"></span></div>
+                    </div>
+                    <div class="connector"></div>
+
+                    <!-- ─── ETAPA 4: MÉTODO FR ─── -->
+                    <div class="step-card locked" id="sepse-s4">
+                        <div class="step-header">
+                        <div class="step-num">4</div>
+                        <div class="step-title">Método de Avaliação de Fluidorresponsividade</div>
+                        </div>
+                        <div class="step-desc">Selecione o método disponível. Quando possível, use PLR + TVI ao ecocardiograma.</div>
+                        <div class="option-grid">
+                        <button class="option-btn" onclick="sepseSelM('plr-tvi',this)">PLR + variação de TVI (eco) <span class="pref-tag">preferencial</span></button>
+                        <button class="option-btn" onclick="sepseSelM('vpp',this)">VPP (VM controlada)</button>
+                        <button class="option-btn" onclick="sepseSelM('plr-pp',this)">PLR + variação de PP</button>
+                        <button class="option-btn" onclick="sepseSelM('mini',this)">Mini-bolus 100 mL</button>
+                        </div>
+                        <div class="btn-row">
+                        <button class="btn-marsala hidden" id="sepse-btn-metodo" onclick="sepseOkMetodo()">Confirmar método</button>
+                        </div>
+                        <div class="done-tag hidden" id="sepse-d4">✓ Método: <span id="sepse-d4v"></span></div>
+                    </div>
+                    <div class="connector"></div>
+
+                    <!-- ─── ETAPA 5: CAMPOS DO MÉTODO ─── -->
+                    <div class="step-card locked" id="sepse-s5">
+                        <div class="step-header">
+                        <div class="step-num">5</div>
+                        <div class="step-title" id="sepse-s5t">Realizar manobra e registrar valores</div>
+                        </div>
+                        <div id="sepse-s5c"></div>
+                        <div class="done-tag hidden" id="sepse-d5">✓ <span id="sepse-d5v"></span></div>
+                    </div>
+                    <div class="connector"></div>
+
+                    <!-- ─── ETAPA 6: CONDUTA + REAVALIAÇÃO TEC ─── -->
+                    <div class="step-card locked" id="sepse-s6">
+                        <div class="step-header">
+                        <div class="step-num">6</div>
+                        <div class="step-title">Conduta e Reavaliação do TEC</div>
+                        </div>
+                        <div id="sepse-s6c" class="hidden">
+                        <div id="sepse-s6-fr-sim" class="hidden">
+                            <div class="alert alert-info"><strong>Fluidorresponsivo</strong> — expansão volêmica indicada.</div>
+                            <div class="field-row">
+                            <div class="field-group"><label>Solução e volume infundido</label><input type="text" id="sepse-sol-v" placeholder="ex: SF 0,9% 500 mL"></div>
+                            <div class="field-group"><label>Tempo de infusão</label><input type="text" id="sepse-sol-t" placeholder="ex: 30 minutos"></div>
+                            </div>
+                        </div>
+                        <div id="sepse-s6-fr-nao" class="hidden">
+                            <div class="alert alert-danger"><strong>Não fluidorresponsivo</strong> — expansão não indicada. Considerar disfunção cardíaca ou vasoplegia.</div>
+                        </div>
+                        <div class="step-desc" style="margin-top:8px;">Reavalie o TEC após a intervenção. Se normalizar, encerre o protocolo. Se persistir alterado, prossiga para o Tier 2.</div>
+                        <div class="field-row" style="margin-top:12px;">
+                            <div class="field-group"><label>TEC pós-intervenção (seg)</label><input type="number" id="sepse-tec2-v" step="0.5" min="0" placeholder="ex: 2,5" oninput="sepseCalcTEC2()"></div>
+                            <div class="field-group"><label>Hora da reavaliação</label><input type="time" id="sepse-tec2-hora"></div>
+                        </div>
+                        <div class="calc-result hidden" id="sepse-tec2-res">
+                            <div>
+                            <div class="calc-item-label">TEC reavaliação</div>
+                            <div class="calc-item-val" id="sepse-tec2-cv">—</div>
+                            </div>
+                            <div class="calc-item-interp" id="sepse-tec2-ci">—</div>
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn-marsala" onclick="sepseOkS6()">Confirmar reavaliação</button>
+                        </div>
+                        <div class="done-tag hidden" id="sepse-d6">✓ <span id="sepse-d6v"></span></div>
+                        </div>
+                    </div>
+
+                    <!-- ─── TIER 2 ─── -->
+                    <div id="sepse-tier2-wrap" class="hidden">
+                        <div class="tier-header">
+                        <div class="tier-badge">TIER 2</div>
+                        <div class="tier-line"></div>
+                        <span style="font-size:11px;color:var(--text-muted);">TEC ainda alterado após Tier 1</span>
+                        </div>
+
+                        <!-- S7: ECO -->
+                        <div class="step-card locked" id="sepse-s7">
+                        <div class="step-header">
+                            <div class="step-num">7</div>
+                            <div class="step-title">Ecocardiografia à Beira Leito</div>
+                        </div>
+                        <div class="step-desc">Realize o eco para identificar o fenótipo de disfunção cardíaca. Apenas ~35% dos pacientes chegam ao Tier 2.</div>
+                        <div class="eco-grid">
+                            <div class="eco-block">
+                            <div class="eco-block-title">Função sistólica VE</div>
+                            <div class="field-group"><label>FE estimada (%)</label><input type="number" id="sepse-fe" min="10" max="80" placeholder="ex: 35" oninput="sepseInterpretEco()"></div>
+                            <div class="field-group"><label>Contratilidade</label>
+                                <select id="sepse-contrat" onchange="sepseInterpretEco()">
+                                <option value="">Selecione...</option>
+                                <option value="normal">Normal</option>
+                                <option value="leve">Disfunção leve</option>
+                                <option value="moderada">Disfunção moderada</option>
+                                <option value="grave">Disfunção grave</option>
+                                </select>
+                            </div>
+                            <div class="field-group"><label>TVI basal (cm)</label><input type="number" id="sepse-tvi-t2" step="0.1" min="0" placeholder="ex: 14,0"></div>
+                            </div>
+                            <div class="eco-block">
+                            <div class="eco-block-title">Função sistólica VD</div>
+                            <div class="field-group"><label>TAPSE (mm)</label><input type="number" id="sepse-tapse" min="0" max="40" placeholder="ex: 14" oninput="sepseInterpretEco()"></div>
+                            <div class="field-group"><label>VD dilatado?</label>
+                                <select id="sepse-vd-dil">
+                                <option value="nao">Não</option>
+                                <option value="leve">Leve</option>
+                                <option value="moderado">Moderado/grave</option>
+                                </select>
+                            </div>
+                            <div class="field-group"><label>D-sign (septal shift)?</label>
+                                <select id="sepse-dsign">
+                                <option value="nao">Não</option>
+                                <option value="sim">Sim</option>
+                                </select>
+                            </div>
+                            </div>
+                            <div class="eco-block">
+                            <div class="eco-block-title">Volemia / VCI</div>
+                            <div class="field-group"><label>VCI diâm. máx. (mm)</label><input type="number" id="sepse-vci-max" min="0" max="40" placeholder="ex: 18"></div>
+                            <div class="field-group"><label>Colapsabilidade VCI</label>
+                                <select id="sepse-vci-col" onchange="sepseInterpretEco()">
+                                <option value="">Selecione...</option>
+                                <option value="gt50">&gt; 50%</option>
+                                <option value="20-50">20 – 50%</option>
+                                <option value="lt20">&lt; 20%</option>
+                                </select>
+                            </div>
+                            </div>
+                            <div class="eco-block">
+                            <div class="eco-block-title">Outros achados</div>
+                            <div class="field-group"><label>Derrame pericárdico</label>
+                                <select id="sepse-derp">
+                                <option value="ausente">Ausente</option>
+                                <option value="pequeno">Pequeno</option>
+                                <option value="moderado">Moderado/grande</option>
+                                </select>
+                            </div>
+                            <div class="field-group"><label>Observações livres</label><textarea id="sepse-eco-obs" placeholder="Achados adicionais..."></textarea></div>
+                            </div>
+                        </div>
+                        <div id="sepse-eco-interp-wrap" class="hidden"></div>
+                        <div class="btn-row">
+                            <button class="btn-marsala" onclick="sepseOkS7()">Confirmar eco</button>
+                        </div>
+                        <div class="done-tag hidden" id="sepse-d7">✓ Ecocardiograma registrado</div>
+                        </div>
+                        <div class="connector"></div>
+
+                        <!-- S8: CONDUTA TIER 2 -->
+                        <div class="step-card locked" id="sepse-s8">
+                        <div class="step-header">
+                            <div class="step-num">8</div>
+                            <div class="step-title">Conduta no Tier 2</div>
+                        </div>
+                        <div id="sepse-s8c" class="hidden">
+                            <div id="sepse-s8-dobuta" class="hidden">
+                            <div class="alert alert-warning"><strong>Disfunção sistólica VE presente</strong> — considerar teste com dobutamina em dose baixa (2,5–5 mcg/kg/min) por 1 hora. Reavaliar TEC após início.</div>
+                            <div class="field-row">
+                                <div class="field-group"><label>Dose dobutamina iniciada (mcg/kg/min)</label><input type="number" id="sepse-dobuta-dose" step="0.5" min="0" placeholder="ex: 2,5"></div>
+                                <div class="field-group"><label>Hora de início</label><input type="time" id="sepse-dobuta-hora"></div>
+                            </div>
+                            </div>
+                            <div id="sepse-s8-map" class="hidden">
+                            <div class="alert alert-info"><strong>Função sistólica preservada</strong> — considerar teste com alvo de PAM mais elevado (75–80 mmHg por 1 hora) para avaliar resposta microcirculatória.</div>
+                            <div class="field-row">
+                                <div class="field-group"><label>PAM alvo testado (mmHg)</label><input type="number" id="sepse-map-alvo" placeholder="ex: 80"></div>
+                                <div class="field-group"><label>NE necessária (mcg/kg/min)</label><input type="number" id="sepse-map-ne" step="0.01" placeholder="ex: 0,30"></div>
+                            </div>
+                            </div>
+                            <div class="field-row" style="margin-top:10px;">
+                            <div class="field-group"><label>TEC após Tier 2 (seg)</label><input type="number" id="sepse-tec3-v" step="0.5" min="0" placeholder="ex: 2,5"></div>
+                            <div class="field-group"></div>
+                            </div>
+                            <div class="field-row single" style="margin-top:4px;">
+                            <div class="field-group"><label>Conduta final e observações</label><textarea id="sepse-conduta-final" placeholder="Descreva a conduta adotada..." style="min-height:72px;"></textarea></div>
+                            </div>
+                            <div class="btn-row">
+                            <button class="btn-marsala" onclick="sepseFinalizar()">Finalizar protocolo e gerar texto</button>
+                            </div>
+                        </div>
+                        </div>
+                    </div>
+
+                    <!-- FINALIZAÇÃO DIRETA (sem Tier 2) -->
+                    <div id="sepse-final-direto" class="hidden" style="margin-top:10px;">
+                        <div class="step-card active">
+                        <div class="step-header">
+                            <div class="step-num" style="background:var(--success);">✓</div>
+                            <div class="step-title">Encerrar protocolo</div>
+                        </div>
+                        <div class="field-row single">
+                            <div class="field-group"><label>Conduta final e observações</label><textarea id="sepse-conduta-direto" placeholder="Descreva a conduta adotada..." style="min-height:72px;"></textarea></div>
+                        </div>
+                        <div class="btn-row">
+                            <button class="btn-marsala" onclick="sepseFinalizarDireto()">Finalizar e gerar texto para evolução</button>
+                        </div>
+                        </div>
+                    </div>
+
+                    <div class="connector"></div>
+
+                    <!-- RESULTADO FINAL -->
+                    <div class="step-card locked" id="sepse-sfinal">
+                        <div class="step-header">
+                        <div class="step-num" style="font-size:14px; background:var(--success);">✓</div>
+                        <div class="step-title">Protocolo concluído — texto para evolução</div>
+                        </div>
+                        <div id="sepse-sfinal-c" class="hidden">
+                        <div class="text-output" id="sepse-texto-ev"></div>
+                        <div class="btn-row">
+                            <button class="btn-marsala" onclick="sepseCopiar()">Copiar texto</button>
+                            <span class="copy-ok" id="sepse-cok">✓ Copiado!</span>
+                            <button class="btn-ghost" onclick="startSepseProtocol()">Novo protocolo</button>
+                        </div>
+                        </div>
+                    </div>
+
+                </div><!-- /protocolo-sepse-ui -->
+            </div>
+
+
         </div><!-- /view-patient -->
     </div><!-- /app-container -->
 
@@ -336,6 +708,56 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
             <div style="display:flex; justify-content: space-between; align-items:center; margin-top: 12px;">
                 <span id="clipboard-status" style="font-size: 12px; color: var(--text-secondary);">Conectado...</span>
                 <button class="btn btn-primary" onclick="closeClipboard()">Fechar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- SEPSE ADMIN MODAL -->
+    <div id="sepse-admin-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:var(--bg-card); padding:24px; border-radius:12px; width:90%; max-width:800px; box-shadow:0 10px 25px rgba(0,0,0,0.2); display: flex; flex-direction: column; max-height: 90vh;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <div>
+                    <h3 style="margin:0; font-size:18px; color:var(--marsala);">🫀 Painel de Coordenação — Sepse</h3>
+                    <p style="margin:4px 0 0; font-size:12px; color:var(--text-secondary);">Monitoramento dos protocolos ANDROMEDA-SHOCK-2</p>
+                </div>
+                <button onclick="closeSepseAdmin()" style="background:none; border:none; font-size:20px; cursor:pointer;">✕</button>
+            </div>
+            
+            <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-bottom:20px;">
+                <div style="background:rgba(13,91,143,0.05); padding:12px; border-radius:8px; border:1px solid rgba(13,91,143,0.2);">
+                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase;">Total Realizado</div>
+                    <div style="font-size:24px; font-weight:700; color:var(--accent);" id="sepse-metric-total">0</div>
+                </div>
+                <div style="background:rgba(34,197,94,0.05); padding:12px; border-radius:8px; border:1px solid rgba(34,197,94,0.2);">
+                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase;">TEC Normalizado</div>
+                    <div style="font-size:24px; font-weight:700; color:var(--success);" id="sepse-metric-norm">0%</div>
+                </div>
+                <div style="background:rgba(217,119,6,0.05); padding:12px; border-radius:8px; border:1px solid rgba(217,119,6,0.2);">
+                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase;">Uso do Tier 2</div>
+                    <div style="font-size:24px; font-weight:700; color:var(--warning);" id="sepse-metric-tier2">0%</div>
+                </div>
+            </div>
+
+            <div style="flex:1; overflow-y:auto;">
+                <table class="atb-table" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Paciente</th>
+                            <th>Médico</th>
+                            <th>Fenótipo</th>
+                            <th>FR</th>
+                            <th>Desfecho TEC</th>
+                        </tr>
+                    </thead>
+                    <tbody id="sepse-admin-tbody">
+                        <tr><td colspan="6" style="text-align:center; padding:20px; color:var(--text-muted);">Carregando protocolos...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="display:flex; justify-content: flex-end; align-items:center; margin-top: 16px;">
+                <button class="btn-ghost" onclick="loadSepseAdminData()">🔄 Atualizar</button>
             </div>
         </div>
     </div>
