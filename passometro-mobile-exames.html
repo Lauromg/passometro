@@ -1,0 +1,1234 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Passômetro — Inserir Exames</title>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+
+  <style>
+    /* ── Reset e base ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --marsala: #470404;
+      --marsala-light: #6b0606;
+      --gelo: #f8f8f8;
+      --gelo-escuro: #efefef;
+      --texto: #1a1a1a;
+      --texto-muted: #666;
+      --borda: #ddd;
+      --sucesso: #1a7a3c;
+      --sucesso-bg: #eaf5ee;
+      --alerta: #b45309;
+      --alerta-bg: #fef3c7;
+      --radius: 10px;
+      --safe-bottom: env(safe-area-inset-bottom, 16px);
+    }
+
+    html, body {
+      height: 100%;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      background: var(--gelo);
+      color: var(--texto);
+      -webkit-tap-highlight-color: transparent;
+      overflow-x: hidden;
+    }
+
+    /* ── Header ── */
+    #header {
+      background: var(--marsala);
+      color: white;
+      padding: 14px 16px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+
+    #header-esquerda h1 {
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    #header-esquerda p {
+      font-size: 12px;
+      opacity: 0.8;
+      margin-top: 1px;
+    }
+
+    #leito-badge {
+      background: rgba(255,255,255,0.22);
+      border: 1px solid rgba(255,255,255,0.35);
+      border-radius: 99px;
+      padding: 4px 12px;
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* ── Abas de modo ── */
+    #abas {
+      display: flex;
+      background: white;
+      border-bottom: 1px solid var(--borda);
+      position: sticky;
+      top: 64px;
+      z-index: 90;
+    }
+
+    .aba {
+      flex: 1;
+      padding: 11px 8px;
+      font-size: 13px;
+      font-weight: 500;
+      text-align: center;
+      color: var(--texto-muted);
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: all 0.15s;
+      user-select: none;
+    }
+
+    .aba.ativa {
+      color: var(--marsala);
+      border-bottom-color: var(--marsala);
+      background: #fdf5f5;
+    }
+
+    /* ── Conteúdo das abas ── */
+    .tela { display: none; padding: 12px 16px 100px; }
+    .tela.visivel { display: block; }
+
+    /* ── Barra de data ── */
+    #barra-data {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: white;
+      border: 1px solid var(--borda);
+      border-radius: var(--radius);
+      padding: 8px 12px;
+      margin-bottom: 12px;
+    }
+
+    #barra-data label {
+      font-size: 12px;
+      color: var(--texto-muted);
+      flex: 1;
+    }
+
+    #barra-data input[type="date"] {
+      border: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--marsala);
+      background: transparent;
+      cursor: pointer;
+      outline: none;
+    }
+
+    /* ── Campo de busca ── */
+    #campo-busca-wrapper {
+      position: relative;
+      margin-bottom: 12px;
+    }
+
+    #campo-busca {
+      width: 100%;
+      padding: 11px 40px 11px 14px;
+      border: 1px solid var(--borda);
+      border-radius: var(--radius);
+      font-size: 15px;
+      background: white;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #campo-busca:focus { border-color: var(--marsala); }
+
+    #icone-busca {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--texto-muted);
+      font-size: 16px;
+      pointer-events: none;
+    }
+
+    /* ── Grupos de exames ── */
+    .grupo {
+      margin-bottom: 10px;
+      background: white;
+      border-radius: var(--radius);
+      border: 1px solid var(--borda);
+      overflow: hidden;
+    }
+
+    .grupo-titulo {
+      background: var(--gelo-escuro);
+      padding: 7px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--texto-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--borda);
+    }
+
+    .linha-exame {
+      display: flex;
+      align-items: center;
+      padding: 0 12px;
+      border-bottom: 1px solid #f0f0f0;
+      min-height: 48px;
+      transition: background 0.1s;
+    }
+
+    .linha-exame:last-child { border-bottom: none; }
+    .linha-exame.preenchida { background: #fdf5f5; }
+
+    .nome-exame {
+      flex: 1;
+      font-size: 14px;
+      color: var(--texto);
+    }
+
+    .unidade-exame {
+      font-size: 11px;
+      color: var(--texto-muted);
+      margin-right: 8px;
+      min-width: 36px;
+      text-align: right;
+    }
+
+    .input-exame {
+      width: 72px;
+      padding: 7px 8px;
+      border: 1px solid var(--borda);
+      border-radius: 7px;
+      font-size: 15px;
+      text-align: center;
+      background: var(--gelo);
+      color: var(--texto);
+      outline: none;
+      transition: border-color 0.15s, background 0.15s;
+      -webkit-appearance: none;
+    }
+
+    .input-exame:focus {
+      border-color: var(--marsala);
+      background: white;
+    }
+
+    .input-exame.tem-valor {
+      border-color: var(--marsala);
+      background: white;
+      color: var(--marsala);
+      font-weight: 600;
+    }
+
+    /* ── Botão salvar (fixo) ── */
+    #btn-salvar-wrapper {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 12px 16px var(--safe-bottom);
+      background: white;
+      border-top: 1px solid var(--borda);
+      z-index: 200;
+    }
+
+    #btn-salvar {
+      width: 100%;
+      padding: 14px;
+      background: var(--marsala);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    #btn-salvar:active { transform: scale(0.98); background: var(--marsala-light); }
+    #btn-salvar:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #contador-preenchidos {
+      font-size: 13px;
+      opacity: 0.85;
+      font-weight: 400;
+    }
+
+    /* ── Tela Ditado ── */
+    #ditado-hint {
+      background: var(--alerta-bg);
+      border: 1px solid #fcd34d;
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 13px;
+      color: var(--alerta);
+      margin-bottom: 12px;
+      line-height: 1.5;
+    }
+
+    #ditado-hint strong { display: block; margin-bottom: 2px; font-size: 12px; }
+
+    #area-texto-ditado {
+      width: 100%;
+      min-height: 90px;
+      border: 1px solid var(--borda);
+      border-radius: var(--radius);
+      padding: 12px;
+      font-size: 15px;
+      background: white;
+      color: var(--texto);
+      resize: none;
+      outline: none;
+      font-family: inherit;
+      transition: border-color 0.15s;
+      margin-bottom: 10px;
+    }
+
+    #area-texto-ditado:focus { border-color: var(--marsala); }
+
+    #btn-microfone {
+      width: 100%;
+      padding: 13px;
+      background: white;
+      border: 2px solid var(--marsala);
+      border-radius: var(--radius);
+      color: var(--marsala);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 12px;
+      transition: all 0.15s;
+    }
+
+    #btn-microfone.gravando {
+      background: var(--marsala);
+      color: white;
+      animation: pulsar 1.2s ease-in-out infinite;
+    }
+
+    @keyframes pulsar {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(71,4,4,0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(71,4,4,0); }
+    }
+
+    #mic-icone { font-size: 20px; }
+
+    #preview-valores {
+      background: white;
+      border: 1px solid var(--borda);
+      border-radius: var(--radius);
+      padding: 12px;
+      margin-bottom: 10px;
+      display: none;
+    }
+
+    #preview-valores h3 {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--texto-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 8px;
+    }
+
+    #lista-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .tag-valor {
+      background: #fdf5f5;
+      border: 1px solid var(--marsala);
+      color: var(--marsala);
+      border-radius: 99px;
+      padding: 3px 10px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .tag-nao-reconhecido {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+      border-radius: 99px;
+      padding: 3px 10px;
+      font-size: 12px;
+    }
+
+    #btn-processar {
+      width: 100%;
+      padding: 12px;
+      background: var(--gelo-escuro);
+      border: 1px solid var(--borda);
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--texto);
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-bottom: 10px;
+    }
+
+    #btn-processar:active { background: #e0e0e0; }
+
+    /* ── Toast de feedback ── */
+    #toast {
+      position: fixed;
+      bottom: 90px;
+      left: 16px;
+      right: 16px;
+      background: var(--sucesso);
+      color: white;
+      padding: 12px 16px;
+      border-radius: var(--radius);
+      font-size: 14px;
+      font-weight: 500;
+      text-align: center;
+      z-index: 300;
+      transform: translateY(20px);
+      opacity: 0;
+      transition: all 0.25s;
+      pointer-events: none;
+    }
+
+    #toast.visivel {
+      transform: translateY(0);
+      opacity: 1;
+    }
+
+    #toast.erro { background: #9b1c1c; }
+
+    /* ── Tela de carregamento ── */
+    #tela-carregando {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      gap: 16px;
+      color: var(--texto-muted);
+      font-size: 14px;
+    }
+
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 3px solid var(--borda);
+      border-top-color: var(--marsala);
+      border-radius: 50%;
+      animation: girar 0.7s linear infinite;
+    }
+
+    @keyframes girar { to { transform: rotate(360deg); } }
+
+    /* ── Tela de erro ── */
+    #tela-erro {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      gap: 12px;
+      padding: 32px;
+      text-align: center;
+    }
+
+    #tela-erro .icone-erro { font-size: 40px; }
+    #tela-erro h2 { font-size: 18px; color: var(--texto); }
+    #tela-erro p { font-size: 14px; color: var(--texto-muted); line-height: 1.5; }
+
+    /* ── Agrupamento oculto por busca ── */
+    .grupo.oculto { display: none; }
+    .linha-exame.oculta { display: none; }
+
+    /* ── Tela de login ── */
+    #tela-login {
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 32px 24px;
+      background: var(--gelo);
+    }
+
+    #tela-login.visivel { display: flex; }
+
+    .login-logo {
+      font-size: 36px;
+      margin-bottom: 8px;
+    }
+
+    .login-titulo {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--marsala);
+      margin-bottom: 4px;
+    }
+
+    .login-sub {
+      font-size: 13px;
+      color: var(--texto-muted);
+      margin-bottom: 28px;
+    }
+
+    .login-card {
+      background: white;
+      border: 1px solid var(--borda);
+      border-radius: var(--radius);
+      padding: 24px;
+      width: 100%;
+      max-width: 360px;
+    }
+
+    .login-card label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--texto-muted);
+      margin-bottom: 4px;
+      margin-top: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .login-card label:first-child { margin-top: 0; }
+
+    .login-card input {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1px solid var(--borda);
+      border-radius: 7px;
+      font-size: 15px;
+      background: var(--gelo);
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .login-card input:focus { border-color: var(--marsala); background: white; }
+
+    #btn-login {
+      width: 100%;
+      margin-top: 20px;
+      padding: 13px;
+      background: var(--marsala);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    #btn-login:active { background: var(--marsala-light); }
+    #btn-login:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    #login-erro {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #9b1c1c;
+      text-align: center;
+      display: none;
+    }
+
+    #app-wrapper { display: none; }
+    #app-wrapper.visivel { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- ══ TELA DE LOGIN ══ -->
+<div id="tela-login">
+  <div class="login-logo">🏥</div>
+  <div class="login-titulo">Passômetro</div>
+  <div class="login-sub">UTI — Hospital São José</div>
+  <div class="login-card">
+    <label>E-mail</label>
+    <input type="email" id="login-email" placeholder="seu@email.com" autocomplete="email" />
+    <label>Senha</label>
+    <input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password" />
+    <button id="btn-login" onclick="fazerLogin()">Entrar</button>
+    <div id="login-erro">E-mail ou senha incorretos.</div>
+  </div>
+</div>
+
+<!-- ══ APP PRINCIPAL ══ -->
+<div id="app-wrapper">
+
+<!-- ══ HEADER ══ -->
+<div id="header">
+  <div id="header-esquerda">
+    <h1>Passômetro UTI — HSJ</h1>
+    <p id="nome-paciente-header">Carregando...</p>
+  </div>
+  <div id="leito-badge">Leito —</div>
+</div>
+
+<!-- ══ ABAS ══ -->
+<div id="abas">
+  <div class="aba ativa" data-tela="campo-a-campo" onclick="trocarAba(this)">
+    📋 Campo a campo
+  </div>
+  <div class="aba" data-tela="ditado" onclick="trocarAba(this)">
+    🎙️ Ditado / Texto
+  </div>
+</div>
+
+<!-- ══ TELA: CAMPO A CAMPO ══ -->
+<div id="tela-campo-a-campo" class="tela visivel">
+
+  <div id="tela-carregando">
+    <div class="spinner"></div>
+    <p>Conectando ao leito...</p>
+  </div>
+
+  <div id="tela-erro">
+    <div class="icone-erro">⚠️</div>
+    <h2>Leito não encontrado</h2>
+    <p>Verifique se o QR Code está correto ou peça ao responsável para gerar um novo.</p>
+  </div>
+
+  <div id="conteudo-campos" style="display:none">
+
+    <div id="barra-data">
+      <label>📅 Data dos exames</label>
+      <input type="date" id="data-exames" />
+    </div>
+
+    <div id="campo-busca-wrapper">
+      <input
+        type="text"
+        id="campo-busca"
+        placeholder="Buscar exame... ex: hb, sódio, troponina"
+        autocomplete="off"
+        oninput="filtrarExames(this.value)"
+      />
+      <span id="icone-busca">🔍</span>
+    </div>
+
+    <div id="lista-grupos">
+      <!-- Grupos gerados dinamicamente pelo JS -->
+    </div>
+
+  </div>
+
+</div>
+
+<!-- ══ TELA: DITADO / TEXTO ══ -->
+<div id="tela-ditado" class="tela">
+
+  <div style="padding-bottom: 8px; display:none" id="data-ditado-wrapper">
+    <!-- barra de data clonada aqui via JS -->
+  </div>
+
+  <div id="ditado-hint">
+    <strong>💡 Como usar</strong>
+    Fale ou escreva os valores como aparecem na tela do laboratório.<br>
+    Ex: <em>"Hb 9, sódio 122, potássio 3.8, creatinina 1.5, PCR 45"</em>
+  </div>
+
+  <button id="btn-microfone" onclick="alternarMicrofone()">
+    <span id="mic-icone">🎙️</span>
+    <span id="mic-texto">Iniciar ditado por voz</span>
+  </button>
+
+  <textarea
+    id="area-texto-ditado"
+    placeholder="Ou digite aqui os valores em texto livre..."
+    oninput="autoExpandir(this)"
+  ></textarea>
+
+  <button id="btn-processar" onclick="processarTexto()">
+    🔍 Reconhecer valores no texto
+  </button>
+
+  <div id="preview-valores">
+    <h3>Valores reconhecidos</h3>
+    <div id="lista-preview"></div>
+    <p id="aviso-nao-reconhecido" style="font-size:12px; color:var(--texto-muted); margin-top:8px; display:none"></p>
+  </div>
+
+</div>
+
+<!-- ══ BOTÃO SALVAR (fixo no fundo) ══ -->
+<div id="btn-salvar-wrapper">
+  <button id="btn-salvar" onclick="salvarExames()" disabled>
+    <span>💾 Salvar e sincronizar</span>
+    <span id="contador-preenchidos"></span>
+  </button>
+</div>
+
+<!-- ══ TOAST ══ -->
+<div id="toast"></div>
+
+</div><!-- /app-wrapper -->
+
+<script>
+// ══════════════════════════════════════════════
+//  CONFIGURAÇÃO FIREBASE
+//  ⚠️ SUBSTITUIR PELOS DADOS DO PROJETO PASSÔMETRO
+// ══════════════════════════════════════════════
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyDoeVKrSwyWluQHSWlN4k7LWHbTMymTyzk",
+  authDomain: "passometro-562bd.firebaseapp.com",
+  projectId: "passometro-562bd",
+  storageBucket: "passometro-562bd.firebasestorage.app",
+  messagingSenderId: "617937355734",
+  appId: "1:617937355734:web:a02eaaae7febf12e159a77"
+};
+
+// ══════════════════════════════════════════════
+//  ESTRUTURA DOS EXAMES
+//  Grupos e campos exatamente como na tabela do PC
+// ══════════════════════════════════════════════
+const GRUPOS_EXAMES = [
+  {
+    nome: "Hemograma",
+    exames: [
+      { id: "hb",             label: "Hb",            unidade: "g/dL",   apelidos: ["hemoglobina", "hgb"] },
+      { id: "ht",             label: "Ht",            unidade: "%",      apelidos: ["hematócrito", "hematocrito"] },
+      { id: "global",         label: "Global",        unidade: "mil/µL", apelidos: ["leucócitos", "leucocitos", "wbc", "global"] },
+      { id: "mielocitos",     label: "Mielócitos",    unidade: "%",      apelidos: ["mielocitos"] },
+      { id: "metamielocitos", label: "Metamielócitos", unidade: "%",     apelidos: ["metamielocitos"] },
+      { id: "bastonetes",     label: "Bastonetes",    unidade: "%",      apelidos: ["bast"] },
+      { id: "segmentados",    label: "Segmentados",   unidade: "%",      apelidos: ["seg", "neutrófilos", "neutrofilos"] },
+      { id: "eosinofilos",    label: "Eosinófilos",   unidade: "%",      apelidos: ["eos"] },
+      { id: "linfoticos",     label: "Linfócitos",    unidade: "%",      apelidos: ["linf"] },
+      { id: "monocitos",      label: "Monócitos",     unidade: "%",      apelidos: ["mono"] },
+      { id: "plaquetas",      label: "Plaquetas",     unidade: "mil/µL", apelidos: ["plt"] },
+    ]
+  },
+  {
+    nome: "Gasometria",
+    exames: [
+      { id: "ph",    label: "pH",    unidade: "",       apelidos: [] },
+      { id: "po2",   label: "pO2",   unidade: "mmHg",   apelidos: ["po2", "pao2"] },
+      { id: "pco2",  label: "pCO2",  unidade: "mmHg",   apelidos: ["pco2", "paco2"] },
+      { id: "hco3",  label: "HCO3",  unidade: "mEq/L",  apelidos: ["bicarbonato", "hco3"] },
+      { id: "be",    label: "BE",    unidade: "mEq/L",  apelidos: ["base excess", "excesso de base"] },
+      { id: "sat",   label: "Sat",   unidade: "%",      apelidos: ["saturação", "saturacao", "sato2"] },
+    ]
+  },
+  {
+    nome: "Função Renal",
+    exames: [
+      { id: "ur",  label: "Ur",  unidade: "mg/dL", apelidos: ["ureia", "uréia"] },
+      { id: "cr",  label: "Cr",  unidade: "mg/dL", apelidos: ["creatinina"] },
+    ]
+  },
+  {
+    nome: "Eletrólitos",
+    exames: [
+      { id: "na",  label: "Na",  unidade: "mEq/L", apelidos: ["sódio", "sodio", "sodium"] },
+      { id: "k",   label: "K",   unidade: "mEq/L", apelidos: ["potássio", "potassio"] },
+      { id: "ca",  label: "Ca",  unidade: "mg/dL", apelidos: ["cálcio", "calcio"] },
+      { id: "mg",  label: "Mg",  unidade: "mg/dL", apelidos: ["magnésio", "magnesio"] },
+      { id: "cl",  label: "Cl",  unidade: "mEq/L", apelidos: ["cloro", "cloreto"] },
+      { id: "p",   label: "P",   unidade: "mg/dL", apelidos: ["fósforo", "fosforo"] },
+    ]
+  },
+  {
+    nome: "Coagulação",
+    exames: [
+      { id: "ttpa", label: "TTPa", unidade: "s",   apelidos: ["ttp", "tromboplastina"] },
+      { id: "inr",  label: "INR",  unidade: "",    apelidos: ["raz"] },
+    ]
+  },
+  {
+    nome: "Cardíaco / Muscular",
+    exames: [
+      { id: "cpk",      label: "CPK",      unidade: "U/L",   apelidos: ["ck"] },
+      { id: "tgo",      label: "TGO",      unidade: "U/L",   apelidos: ["ast"] },
+      { id: "tgp",      label: "TGP",      unidade: "U/L",   apelidos: ["alt"] },
+      { id: "troponina",label: "Troponina",unidade: "ng/mL", apelidos: ["trop"] },
+    ]
+  },
+  {
+    nome: "Hepático / Bilirrubinas",
+    exames: [
+      { id: "bd",  label: "BD",  unidade: "mg/dL", apelidos: ["bilirrubina direta"] },
+      { id: "bi",  label: "BI",  unidade: "mg/dL", apelidos: ["bilirrubina indireta"] },
+      { id: "ggt", label: "GGT", unidade: "U/L",   apelidos: [] },
+      { id: "fa",  label: "FA",  unidade: "U/L",   apelidos: ["fosfatase alcalina"] },
+      { id: "alb", label: "Alb", unidade: "g/dL",  apelidos: ["albumina"] },
+    ]
+  },
+  {
+    nome: "Inflamação / Outros",
+    exames: [
+      { id: "pcr",     label: "PCR",     unidade: "mg/L",   apelidos: ["proteína c reativa", "proteina c reativa"] },
+      { id: "lactato", label: "Lactato", unidade: "mmol/L", apelidos: ["lact"] },
+      { id: "svo2",    label: "SvO2",    unidade: "%",      apelidos: ["saturação venosa", "saturacao venosa"] },
+      { id: "gap_co2", label: "GAP CO2", unidade: "mmHg",   apelidos: ["gap"] },
+    ]
+  }
+];
+
+// ══════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ══════════════════════════════════════════════
+let db = null;
+let auth = null;
+let leitoId = null;
+let nomePaciente = "Paciente";
+let valoresPendentes = {};
+
+// ══════════════════════════════════════════════
+//  INICIALIZAÇÃO
+// ══════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded", () => {
+  const params = new URLSearchParams(window.location.search);
+  leitoId = params.get("leito") || "1";
+
+  const hoje = new Date().toISOString().split("T")[0];
+  document.getElementById("data-exames").value = hoje;
+
+  inicializarFirebase();
+
+  document.getElementById("login-senha").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") fazerLogin();
+  });
+});
+
+function inicializarFirebase() {
+  try {
+    firebase.initializeApp(FIREBASE_CONFIG);
+    db = firebase.firestore();
+    auth = firebase.auth();
+
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        document.getElementById("tela-login").classList.remove("visivel");
+        document.getElementById("app-wrapper").classList.add("visivel");
+        carregarLeito();
+      } else {
+        document.getElementById("tela-login").classList.add("visivel");
+        document.getElementById("app-wrapper").classList.remove("visivel");
+        document.getElementById("tela-carregando").style.display = "none";
+      }
+    });
+
+  } catch (e) {
+    erroFirebase(e);
+  }
+}
+
+function fazerLogin() {
+  const email = document.getElementById("login-email").value.trim();
+  const senha = document.getElementById("login-senha").value;
+  const btn = document.getElementById("btn-login");
+  const erro = document.getElementById("login-erro");
+
+  if (!email || !senha) return;
+
+  btn.disabled = true;
+  btn.textContent = "Entrando...";
+  erro.style.display = "none";
+
+  auth.signInWithEmailAndPassword(email, senha)
+    .catch(() => {
+      erro.style.display = "block";
+      btn.disabled = false;
+      btn.textContent = "Entrar";
+    });
+}
+
+function carregarLeito() {
+  document.getElementById("leito-badge").textContent = `Leito ${leitoId}`;
+
+  const docRef = db.collection('passometro').doc('leitos');
+  docRef.get().then((doc) => {
+    if (doc.exists) {
+      const beds = doc.data().beds;
+      const bedIndex = parseInt(leitoId) - 1;
+      if (beds && beds[bedIndex]) {
+        nomePaciente = beds[bedIndex].name || "Paciente Não Identificado";
+      }
+    }
+    document.getElementById("nome-paciente-header").textContent = nomePaciente;
+    renderizarGrupos();
+    document.getElementById("tela-carregando").style.display = "none";
+    document.getElementById("conteudo-campos").style.display = "block";
+  }).catch(erroFirebase);
+}
+
+function erroFirebase(e) {
+  console.error(e);
+  document.getElementById("tela-carregando").style.display = "none";
+  document.getElementById("tela-erro").style.display = "flex";
+}
+
+// ══════════════════════════════════════════════
+//  RENDERIZAÇÃO DOS GRUPOS
+// ══════════════════════════════════════════════
+function renderizarGrupos() {
+  const container = document.getElementById("lista-grupos");
+  container.innerHTML = "";
+
+  GRUPOS_EXAMES.forEach(grupo => {
+    const divGrupo = document.createElement("div");
+    divGrupo.className = "grupo";
+    divGrupo.dataset.grupo = grupo.nome;
+
+    const titulo = document.createElement("div");
+    titulo.className = "grupo-titulo";
+    titulo.textContent = grupo.nome;
+    divGrupo.appendChild(titulo);
+
+    grupo.exames.forEach(exame => {
+      const linha = document.createElement("div");
+      linha.className = "linha-exame";
+      linha.dataset.exameId = exame.id;
+      linha.dataset.busca = [exame.label, ...exame.apelidos].join(" ").toLowerCase();
+
+      linha.innerHTML = `
+        <span class="nome-exame">${exame.label}</span>
+        <span class="unidade-exame">${exame.unidade}</span>
+        <input
+          class="input-exame"
+          type="number"
+          inputmode="decimal"
+          step="any"
+          placeholder="—"
+          data-exame-id="${exame.id}"
+          onchange="aoMudarValor(this)"
+          oninput="aoMudarValor(this)"
+        />
+      `;
+
+      divGrupo.appendChild(linha);
+    });
+
+    container.appendChild(divGrupo);
+  });
+}
+
+// ══════════════════════════════════════════════
+//  INTERAÇÃO: campos
+// ══════════════════════════════════════════════
+function aoMudarValor(input) {
+  const linha = input.closest(".linha-exame");
+  const temValor = input.value.trim() !== "";
+  input.classList.toggle("tem-valor", temValor);
+  linha.classList.toggle("preenchida", temValor);
+  atualizarContador();
+}
+
+function atualizarContador() {
+  const inputs = document.querySelectorAll(".input-exame");
+  let total = 0;
+  inputs.forEach(i => { if (i.value.trim()) total++; });
+
+  const btn = document.getElementById("btn-salvar");
+  const span = document.getElementById("contador-preenchidos");
+  btn.disabled = total === 0;
+  span.textContent = total > 0 ? `(${total} exame${total > 1 ? "s" : ""})` : "";
+}
+
+// ══════════════════════════════════════════════
+//  BUSCA
+// ══════════════════════════════════════════════
+function filtrarExames(termo) {
+  const t = removerAcentos(termo.toLowerCase().trim());
+  const grupos = document.querySelectorAll(".grupo");
+
+  grupos.forEach(grupo => {
+    let grupoVisible = false;
+    const linhas = grupo.querySelectorAll(".linha-exame");
+    linhas.forEach(linha => {
+      const busca = removerAcentos(linha.dataset.busca || "");
+      const match = !t || busca.includes(t);
+      linha.classList.toggle("oculta", !match);
+      if (match) grupoVisible = true;
+    });
+    grupo.classList.toggle("oculto", !grupoVisible);
+  });
+}
+
+function removerAcentos(str) {
+  return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+// ══════════════════════════════════════════════
+//  ABAS
+// ══════════════════════════════════════════════
+function trocarAba(el) {
+  document.querySelectorAll(".aba").forEach(a => a.classList.remove("ativa"));
+  el.classList.add("ativa");
+
+  const id = el.dataset.tela;
+  document.querySelectorAll(".tela").forEach(t => t.classList.remove("visivel"));
+  document.getElementById(`tela-${id}`).classList.add("visivel");
+}
+
+// ══════════════════════════════════════════════
+//  DITADO POR VOZ (Web Speech API)
+// ══════════════════════════════════════════════
+let recognition = null;
+let gravando = false;
+
+function alternarMicrofone() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    mostrarToast("Voz não suportada neste navegador. Use o campo de texto.", "erro");
+    return;
+  }
+
+  if (gravando) {
+    recognition.stop();
+    return;
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognition = new SpeechRecognition();
+  recognition.lang = "pt-BR";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onstart = () => {
+    gravando = true;
+    document.getElementById("btn-microfone").classList.add("gravando");
+    document.getElementById("mic-texto").textContent = "Gravando... (toque para parar)";
+  };
+
+  recognition.onresult = (event) => {
+    let texto = "";
+    for (let i = 0; i < event.results.length; i++) {
+      texto += event.results[i][0].transcript + " ";
+    }
+    document.getElementById("area-texto-ditado").value = texto.trim();
+  };
+
+  recognition.onend = () => {
+    gravando = false;
+    document.getElementById("btn-microfone").classList.remove("gravando");
+    document.getElementById("mic-texto").textContent = "Iniciar ditado por voz";
+    // Processar automaticamente ao terminar
+    processarTexto();
+  };
+
+  recognition.onerror = () => {
+    gravando = false;
+    document.getElementById("btn-microfone").classList.remove("gravando");
+    document.getElementById("mic-texto").textContent = "Iniciar ditado por voz";
+    mostrarToast("Erro no microfone. Tente novamente.", "erro");
+  };
+
+  recognition.start();
+}
+
+function autoExpandir(el) {
+  el.style.height = "auto";
+  el.style.height = (el.scrollHeight) + "px";
+}
+
+// ══════════════════════════════════════════════
+//  PROCESSAMENTO DE TEXTO
+//  Reconhece "Hb 9", "sódio 122", "k 3.8" etc.
+// ══════════════════════════════════════════════
+function processarTexto() {
+  const texto = document.getElementById("area-texto-ditado").value;
+  if (!texto.trim()) return;
+
+  // Montar mapa de apelidos → id
+  const mapaApelidos = {};
+  GRUPOS_EXAMES.forEach(grupo => {
+    grupo.exames.forEach(exame => {
+      // Label principal
+      mapaApelidos[removerAcentos(exame.label.toLowerCase())] = exame.id;
+      // Apelidos
+      exame.apelidos.forEach(ap => {
+        mapaApelidos[removerAcentos(ap.toLowerCase())] = exame.id;
+      });
+    });
+  });
+
+  // Mapa de id → label para exibição
+  const mapaLabel = {};
+  GRUPOS_EXAMES.forEach(g => g.exames.forEach(e => { mapaLabel[e.id] = e.label; }));
+
+  const reconhecidos = {};
+  const naoReconhecidos = [];
+
+  // Regex: "palavra(s) número" com separadores variados
+  const regex = /([a-záàâãéèêíïóôõöúçñ\s]{1,30?})\s*[:\-=]?\s*(-?\d+[\.,]?\d*)/gi;
+  let match;
+
+  while ((match = regex.exec(texto)) !== null) {
+    const termoRaw = match[1].trim();
+    const valor = match[2].replace(",", ".");
+    const termo = removerAcentos(termoRaw.toLowerCase());
+
+    if (mapaApelidos[termo]) {
+      reconhecidos[mapaApelidos[termo]] = parseFloat(valor);
+    } else {
+      // Tentar match parcial
+      let encontrado = false;
+      for (const ap in mapaApelidos) {
+        if (ap.startsWith(termo) || termo.startsWith(ap)) {
+          reconhecidos[mapaApelidos[ap]] = parseFloat(valor);
+          encontrado = true;
+          break;
+        }
+      }
+      if (!encontrado && valor) {
+        naoReconhecidos.push(`"${termoRaw} ${valor}"`);
+      }
+    }
+  }
+
+  // Atualizar preview
+  const previewDiv = document.getElementById("preview-valores");
+  const listaPreview = document.getElementById("lista-preview");
+  listaPreview.innerHTML = "";
+
+  if (Object.keys(reconhecidos).length === 0) {
+    mostrarToast("Nenhum valor reconhecido. Tente reformular.", "erro");
+    return;
+  }
+
+  previewDiv.style.display = "block";
+  valoresPendentes = reconhecidos;
+
+  Object.entries(reconhecidos).forEach(([id, val]) => {
+    const tag = document.createElement("span");
+    tag.className = "tag-valor";
+    tag.textContent = `${mapaLabel[id] || id} = ${val}`;
+    listaPreview.appendChild(tag);
+  });
+
+  if (naoReconhecidos.length > 0) {
+    const aviso = document.getElementById("aviso-nao-reconhecido");
+    aviso.style.display = "block";
+    aviso.textContent = `Não reconhecido: ${naoReconhecidos.join(", ")}`;
+  }
+
+  // Preencher campos na aba campo-a-campo
+  preencherCamposDosDitados(reconhecidos);
+
+  mostrarToast(`${Object.keys(reconhecidos).length} valor(es) reconhecido(s)! Confira e salve.`);
+}
+
+function preencherCamposDosDitados(valores) {
+  Object.entries(valores).forEach(([id, val]) => {
+    const input = document.querySelector(`.input-exame[data-exame-id="${id}"]`);
+    if (input) {
+      input.value = val;
+      aoMudarValor(input);
+    }
+  });
+}
+
+// ══════════════════════════════════════════════
+//  SALVAR NO FIREBASE
+// ══════════════════════════════════════════════
+function salvarExames() {
+  const btn = document.getElementById("btn-salvar");
+  btn.disabled = true;
+  btn.querySelector("span:first-child").textContent = "⏳ Salvando...";
+
+  const data = document.getElementById("data-exames").value;
+  const inputs = document.querySelectorAll(".input-exame");
+  const valores = {};
+
+  inputs.forEach(input => {
+    if (input.value.trim()) {
+      valores[input.dataset.exameId] = parseFloat(input.value);
+    }
+  });
+
+  if (Object.keys(valores).length === 0) {
+    mostrarToast("Preencha ao menos um exame.", "erro");
+    btn.disabled = false;
+    btn.querySelector("span:first-child").textContent = "💾 Salvar e sincronizar";
+    return;
+  }
+
+  const idMap = {
+    'global': 'leuco',
+    'linfoticos': 'linf',
+    'monocitos': 'mono',
+    'plaquetas': 'plaq',
+    'ttpa': 'tppa'
+  };
+
+  const docRef = db.collection('passometro').doc('leitos');
+  
+  db.runTransaction((transaction) => {
+    return transaction.get(docRef).then((doc) => {
+      if (!doc.exists) throw "Documento não encontrado!";
+      
+      const beds = doc.data().beds;
+      const bedIndex = parseInt(leitoId) - 1;
+      
+      if (!beds || !beds[bedIndex]) throw "Leito não encontrado!";
+      
+      let bed = beds[bedIndex];
+      if (!bed.exams) bed.exams = [];
+      
+      let examObj = bed.exams.find(e => e.date === data);
+      if (!examObj) {
+        examObj = { date: data };
+        bed.exams.push(examObj);
+      }
+      
+      // Update values
+      Object.keys(valores).forEach(key => {
+        let finalKey = idMap[key] || key;
+        examObj[finalKey] = valores[key].toString();
+      });
+      
+      transaction.update(docRef, { beds: beds });
+    });
+  }).then(() => {
+    mostrarToast(`✅ ${Object.keys(valores).length} exame(s) sincronizados!`);
+    btn.querySelector("span:first-child").textContent = "💾 Salvar e sincronizar";
+    // Não limpar os campos para facilitar conferência visual
+    atualizarContador();
+  }).catch(err => {
+    console.error(err);
+    mostrarToast("Erro ao salvar. Verifique a conexão.", "erro");
+    btn.disabled = false;
+    btn.querySelector("span:first-child").textContent = "💾 Salvar e sincronizar";
+  });
+}
+
+// ══════════════════════════════════════════════
+//  TOAST
+// ══════════════════════════════════════════════
+function mostrarToast(msg, tipo = "sucesso") {
+  const toast = document.getElementById("toast");
+  toast.textContent = msg;
+  toast.className = `visivel ${tipo === "erro" ? "erro" : ""}`;
+  setTimeout(() => { toast.className = ""; }, 3500);
+}
+</script>
+</body>
+</html>

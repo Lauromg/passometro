@@ -2248,6 +2248,9 @@ async function initApp() {
     await saveFirebase();
   }
 
+  // Real-time listener for mobile updates
+  iniciarSyncTempoReal();
+
   // Load nursing balance data
   await loadBalancoData();
 
@@ -2274,6 +2277,70 @@ async function initApp() {
 
 // Called from index.html after Firebase auth resolves
 window.startApp = initApp;
+
+
+// ===== QR CODE CELULAR =====
+function abrirModalQRCode() {
+  const bedIdx = state.currentBed;
+  const leitoNum = (bedIdx !== null && state.beds[bedIdx]) ? state.beds[bedIdx].number : 1;
+  const url = `https://passometro-562bd.web.app/passometro-mobile-exames.html?leito=${leitoNum}`;
+
+  document.getElementById("qrcode-container").innerHTML = "";
+  new QRCode(document.getElementById("qrcode-container"), {
+    text: url,
+    width: 200,
+    height: 200,
+    colorDark: "#470404",
+    colorLight: "#ffffff",
+    correctLevel: QRCode.CorrectLevel.M
+  });
+  document.getElementById("qrcode-url-label").textContent = `Leito ${leitoNum}`;
+  const modal = document.getElementById("modal-qrcode");
+  modal.style.display = "flex";
+}
+
+function fecharModalQRCode() {
+  document.getElementById("modal-qrcode").style.display = "none";
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  const modal = document.getElementById("modal-qrcode");
+  if (modal) {
+    modal.addEventListener("click", (e) => { if (e.target === modal) fecharModalQRCode(); });
+  }
+});
+
+
+// ===== SYNC EM TEMPO REAL (onSnapshot) =====
+let unsubscribeSnapshot = null;
+
+function iniciarSyncTempoReal() {
+  if (!window.firebaseDb || !window.firebaseFirestore) return;
+  const { doc, onSnapshot } = window.firebaseFirestore;
+  const db = window.firebaseDb;
+
+  unsubscribeSnapshot = onSnapshot(doc(db, 'passometro/leitos'), (snap) => {
+    // Ignora se há um save pendente (evita loop de sobrescrita)
+    if (saveTimeout) return;
+    if (!snap.exists()) return;
+    const data = snap.data();
+    if (data.beds && Array.isArray(data.beds) && data.beds.length === TOTAL_BEDS) {
+      // Só atualiza exames dos leitos que não estão sendo editados no momento
+      data.beds.forEach((remoteBed, idx) => {
+        if (idx === state.currentBed) {
+          // Para o leito aberto, atualiza apenas os exames (não sobrescreve texto em edição)
+          if (remoteBed.exams) state.beds[idx].exams = remoteBed.exams;
+        } else {
+          state.beds[idx] = remoteBed;
+        }
+      });
+      // Atualiza a view se a aba de exames estiver aberta
+      if (state.currentTab === 'exames' && state.currentBed !== null) {
+        renderExames(state.beds[state.currentBed]);
+      }
+    }
+  });
+}
 
 
 // ===== PROTOCOLO SEPSE (ANDROMEDA-SHOCK-2) =====

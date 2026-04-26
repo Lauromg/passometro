@@ -234,7 +234,10 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
             <!-- EXAMES -->
             <div class="tab-content" id="tab-exames">
                 <div class="section-card">
-                    <h3>📊 Exames Laboratoriais</h3>
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                        <h3 style="margin:0;">📊 Exames Laboratoriais</h3>
+                        <button onclick="abrirModalQRCode()" style="display:flex;align-items:center;gap:6px;padding:6px 12px;background:#470404;color:white;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;">📱 Celular</button>
+                    </div>
                     <p style="font-size:13px;color:var(--text-secondary);margin-bottom:16px;">Adicione resultados de
                         exames para acompanhar a evolução ao longo dos dias.</p>
                         
@@ -840,6 +843,20 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
             if (e.key === 'Enter') btnLogin.click();
         });
     </script>
+
+    <!-- QR Code library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <!-- Modal QR Code celular -->
+    <div id="modal-qrcode" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:white;border-radius:16px;padding:28px;text-align:center;max-width:300px;width:90%;margin:0 auto;position:relative;">
+            <button onclick="fecharModalQRCode()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:22px;cursor:pointer;color:#666;line-height:1;">×</button>
+            <h3 style="margin-bottom:4px;color:#470404;font-size:17px;">Abrir no celular</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:16px;">Escaneie para inserir os exames pelo celular</p>
+            <div id="qrcode-container" style="display:flex;justify-content:center;"></div>
+            <p style="font-size:12px;color:#999;margin-top:12px;" id="qrcode-url-label"></p>
+        </div>
+    </div>
 </body>
 
 </html>
