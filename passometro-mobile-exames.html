@@ -1077,8 +1077,15 @@ function processarTexto() {
   const reconhecidos = {};
   const naoReconhecidos = [];
 
-  // Regex: "palavra(s) número" com separadores variados
-  const regex = /([a-záàâãéèêíïóôõöúçñ\s]{1,30?})\s*[:\-=]?\s*(-?\d+[\.,]?\d*)/gi;
+  // Regex: 1 a 4 palavras (letras + acentos), separador opcional, depois número
+  // Ex: "Hb 13", "creatinina: 1,2", "sódio = 140", "proteína c reativa 5"
+  const reLetra = '[a-zÀ-ÿ]+';
+  const regex = new RegExp(
+    '(' + reLetra + '(?:\\s+' + reLetra + '){0,3})' +
+    '\\s*[:\\-=]?\\s*' +
+    '(-?\\d+[.,]?\\d*)',
+    'gi'
+  );
   let match;
 
   while ((match = regex.exec(texto)) !== null) {
@@ -1089,17 +1096,27 @@ function processarTexto() {
     if (mapaApelidos[termo]) {
       reconhecidos[mapaApelidos[termo]] = parseFloat(valor);
     } else {
-      // Tentar match parcial
       let encontrado = false;
-      for (const ap in mapaApelidos) {
-        if (ap.startsWith(termo) || termo.startsWith(ap)) {
-          reconhecidos[mapaApelidos[ap]] = parseFloat(valor);
+      // Tentar cada palavra individual do termo (ex: "proteína c reativa" → testa "pcr")
+      for (const palavra of termo.split(/\s+/)) {
+        if (mapaApelidos[palavra]) {
+          reconhecidos[mapaApelidos[palavra]] = parseFloat(valor);
           encontrado = true;
           break;
         }
       }
+      // Tentar prefixo (ex: "creat" → "creatinina")
+      if (!encontrado) {
+        for (const ap in mapaApelidos) {
+          if (ap.startsWith(termo) || termo.startsWith(ap)) {
+            reconhecidos[mapaApelidos[ap]] = parseFloat(valor);
+            encontrado = true;
+            break;
+          }
+        }
+      }
       if (!encontrado && valor) {
-        naoReconhecidos.push(`"${termoRaw} ${valor}"`);
+        naoReconhecidos.push(`"${termoRaw}: ${valor}"`);
       }
     }
   }
