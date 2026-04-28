@@ -1459,6 +1459,9 @@ function renderDispositivos(bed) {
     if (isDrug && !isImported) return '';
 
     let dev = bed.devices[d.id] || { active: false, detail: '', calc: null };
+    if (isImported) {
+        dev.active = true;
+    }
 
     let calcHtml = '';
     if (isDrug && dev.active) {
@@ -1495,9 +1498,9 @@ function renderDispositivos(bed) {
 
       calcHtml = `
         <div class="drug-calc-box" style="margin-top:8px; padding:8px; background:var(--bg-input); border-radius:4px; border:1px solid var(--border); font-size:12px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-             <span style="font-weight:600; color:var(--text-secondary);">Solução:</span>
-             <select onchange="updateDrugCalc('${d.id}', 'type', this.value)" style="font-size:11px; padding:2px; border:1px solid var(--border); border-radius:4px;">
+          <div style="margin-bottom:6px;">
+             <span style="font-weight:600; color:var(--text-secondary); display:block; margin-bottom:2px;">Solução:</span>
+             <select onchange="updateDrugCalc('${d.id}', 'type', this.value)" style="width:100%; font-size:11px; padding:4px; border:1px solid var(--border); border-radius:4px; text-overflow:ellipsis;">
                 ${optionsHtml}
                 <option value="custom" ${dev.calc.type === 'custom' ? 'selected' : ''}>Personalizada...</option>
              </select>

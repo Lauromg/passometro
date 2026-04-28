@@ -375,8 +375,9 @@ function renderGanhos() {
         hours.forEach((h, idx) => {
             const v = g.volumes[h] || '';
             let arrowBtn = '';
-            if (v === '' && idx === lastFilledIdx + 1 && lastFilledIdx !== -1) {
-                arrowBtn = `<button title="Copiar p/ próximo" style="position:absolute; right: -5px; top: 50%; transform: translateY(-50%); background: var(--accent); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; padding:0; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" onclick="copyNextHour(${i}, '${hours[lastFilledIdx]}', '${h}')">➔</button>`;
+            if (idx === lastFilledIdx && idx < hours.length - 1) {
+                const nextHour = hours[idx + 1];
+                arrowBtn = `<button title="Copiar p/ próximo" style="position:absolute; right: -5px; top: 50%; transform: translateY(-50%); background: var(--accent); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; padding:0; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" onclick="copyNextHour(${i}, '${h}', '${nextHour}')">➔</button>`;
             }
             html += `<td style="position:relative; min-width:65px;"><input type="number" style="width:100%; text-align:center; padding: 6px 4px;" value="${v}" placeholder="0" onchange="updateGanhoVol(${i},'${h}',this.value)">${arrowBtn}</td>`;
         });
