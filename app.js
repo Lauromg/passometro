@@ -1400,6 +1400,16 @@ function getActiveDrugsFromBalanco(bedIdx) {
   return active;
 }
 
+window.enableDevice = function(bedIdx, deviceId) {
+  const bed = state.beds[bedIdx];
+  if (!bed) return;
+  if (!bed.devices) bed.devices = {};
+  if (!bed.devices[deviceId]) bed.devices[deviceId] = { active: true, detail: '', calc: null };
+  else bed.devices[deviceId].active = true;
+  renderActiveTabContent();
+  triggerSave();
+}
+
 function renderDispositivos(bed) {
   const container = document.getElementById('devices-grid');
   if (!container) return;
@@ -1409,17 +1419,46 @@ function renderDispositivos(bed) {
   const importedDrugs = getActiveDrugsFromBalanco(bedIdx);
   const peso = parseFloat(bed.peso) || 0;
 
-  container.innerHTML = DEVICES_LIST.map(d => {
+  let promptsHtml = '';
+  const hasDVA = importedDrugs['nora'] || importedDrugs['dopa'] || importedDrugs['adrenalina'] || importedDrugs['vasopressina'] || importedDrugs['nipride'];
+  const hasCVC = bed.devices['cvc']?.active || bed.devices['pam']?.active;
+  if (hasDVA && !hasCVC) {
+      promptsHtml += `<div style="background:var(--warning-bg); border:1px solid var(--warning); padding:10px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:var(--warning); font-size:13px; font-weight:600;">💡 Paciente com DVA. Habilitar CVC?</span>
+        <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="enableDevice(${bedIdx}, 'cvc')">Sim, CVC</button>
+      </div>`;
+  }
+
+  let hasDieta = false;
+  const today = formatDateISO(new Date());
+  ['diurno', 'noturno'].forEach(shift => {
+      const key = `${bedIdx}_${today}_${shift}`;
+      const data = balancoData[key];
+      if (data && data.ganhos) {
+          data.ganhos.forEach(g => {
+              if (g.descricao && g.descricao.toLowerCase().includes('dieta')) hasDieta = true;
+          });
+      }
+  });
+
+  const hasSonda = bed.devices['sne']?.active || bed.devices['sng']?.active;
+  if (hasDieta && !hasSonda) {
+      promptsHtml += `<div style="background:var(--info-bg); border:1px solid var(--accent); padding:10px; border-radius:8px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+        <span style="color:var(--accent); font-size:13px; font-weight:600;">💡 Recebendo Dieta. Habilitar SNE?</span>
+        <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="enableDevice(${bedIdx}, 'sne')">Sim, SNE</button>
+      </div>`;
+  }
+
+  const cardsHtml = DEVICES_LIST.map(d => {
     const isImported = importedDrugs.hasOwnProperty(d.id);
     const importedRate = isImported ? importedDrugs[d.id] : null;
     
-    let dev = bed.devices[d.id] || { active: false, detail: '', calc: null };
-    if (isImported) {
-      dev.active = true;
-    }
-
     const isDrug = DRUG_SOLUTIONS.hasOwnProperty(d.id);
     const drugInfo = isDrug ? DRUG_SOLUTIONS[d.id] : null;
+
+    if (isDrug && !isImported) return '';
+
+    let dev = bed.devices[d.id] || { active: false, detail: '', calc: null };
 
     let calcHtml = '';
     if (isDrug && dev.active) {
@@ -1483,9 +1522,8 @@ function renderDispositivos(bed) {
     return `
       <div class="device-card ${dev.active ? 'active' : ''} ${isImported ? 'imported-device' : ''}" style="${isImported ? 'border: 1px dashed var(--accent);' : ''}">
         <div class="device-card-header">
-          <button class="device-toggle ${dev.active ? 'on' : ''}" 
-                  onclick="${isImported ? `alert('Droga ativa no balanço hídrico. Para desligar, pare no balanço ou aguarde atualização.')` : `toggleDevice('${d.id}')`}"></button>
-          <span class="device-name">${d.name} ${isImported ? '<span style="font-size:10px;color:var(--accent);margin-left:4px;">(Balanço)</span>' : ''}</span>
+          ${isDrug ? `<span class="resumo-badge resumo-info" style="font-size:10px; padding:2px 6px;">Enfermagem</span>` : `<button class="device-toggle ${dev.active ? 'on' : ''}" onclick="toggleDevice('${d.id}')"></button>`}
+          <span class="device-name" style="${isDrug ? 'margin-left:8px;' : ''}">${d.name}</span>
         </div>
         ${dev.active ? `
           <div class="device-detail">
@@ -1502,6 +1540,8 @@ function renderDispositivos(bed) {
       </div>
     `;
   }).join('');
+  
+  container.innerHTML = promptsHtml + cardsHtml;
 }
 
 function updateDrugCalc(deviceId, field, value) {

@@ -364,13 +364,21 @@ function renderGanhos() {
         html += `<tr>
       <td>
         <input list="drogas-uti" value="${escapeHTML(g.descricao || '')}" placeholder="Noradrenalina, SF 0.9%..." onchange="updateGanhoDesc(${i},this.value)">
-        <button class="btn btn-header" style="font-size:10px;padding:2px 6px;margin-top:4px;" onclick="autoFillGanho(${i})">➔ Copiar Infusão p/ Frente</button>
       </td>
       <td style="text-align:center; font-weight:bold; color:var(--accent);">${rowTotal}</td>`;
 
-        hours.forEach(h => {
+        let lastFilledIdx = -1;
+        hours.forEach((h, idx) => {
+            if (g.volumes[h] && g.volumes[h] !== '') lastFilledIdx = idx;
+        });
+
+        hours.forEach((h, idx) => {
             const v = g.volumes[h] || '';
-            html += `<td><input type="number" style="width:50px; text-align:center;" value="${v}" placeholder="0" onchange="updateGanhoVol(${i},'${h}',this.value)"></td>`;
+            let arrowBtn = '';
+            if (v === '' && idx === lastFilledIdx + 1 && lastFilledIdx !== -1) {
+                arrowBtn = `<button title="Copiar p/ próximo" style="position:absolute; right: -5px; top: 50%; transform: translateY(-50%); background: var(--accent); color: white; border: none; border-radius: 50%; width: 20px; height: 20px; font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10; padding:0; box-shadow: 0 1px 3px rgba(0,0,0,0.2);" onclick="copyNextHour(${i}, '${hours[lastFilledIdx]}', '${h}')">➔</button>`;
+            }
+            html += `<td style="position:relative; min-width:65px;"><input type="number" style="width:100%; text-align:center; padding: 6px 4px;" value="${v}" placeholder="0" onchange="updateGanhoVol(${i},'${h}',this.value)">${arrowBtn}</td>`;
         });
 
         html += `<td><button class="row-delete" onclick="deleteGanho(${i})">✕</button></td>
@@ -406,21 +414,10 @@ function syncGanhoTotal(ganho) {
     ganho.volume = Object.values(ganho.volumes).reduce((s, v) => s + (parseFloat(v) || 0), 0);
 }
 
-function autoFillGanho(i) {
+function copyNextHour(i, fromHour, toHour) {
     const ganho = getCurrentShiftData().ganhos[i];
     if (!ganho.volumes) return;
-    const hours = SHIFT_HOURS[state.currentShift];
-    let currentValue = null;
-
-    // Encontra o primeiro valor e arrasta ele para as seguintes vazias
-    hours.forEach(h => {
-        const val = parseFloat(ganho.volumes[h]);
-        if (!isNaN(val)) {
-            currentValue = val; // Define o novo valor atual a copiar
-        } else if (currentValue !== null) {
-            ganho.volumes[h] = currentValue; // Preenche celula vazia se temos um valor arrastando
-        }
-    });
+    ganho.volumes[toHour] = ganho.volumes[fromHour];
     syncGanhoTotal(ganho);
     renderGanhos();
     triggerSave();
