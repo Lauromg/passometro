@@ -52,10 +52,64 @@ function getShiftKey(bedIdx, date, shift) {
     return `${bedIdx}_${date}_${shift}`;
 }
 
+function getPreviousShiftKey(bedIdx, dateStr, shift) {
+    if (shift === 'noturno') {
+        return getShiftKey(bedIdx, dateStr, 'diurno');
+    } else {
+        const d = new Date(dateStr + 'T12:00:00');
+        d.setDate(d.getDate() - 1);
+        return getShiftKey(bedIdx, formatDateISO(d), 'noturno');
+    }
+}
+
 function getCurrentShiftData() {
     const key = getShiftKey(state.currentBed, state.currentDate, state.currentShift);
     if (!state.balanco[key]) {
-        state.balanco[key] = createEmptyShift();
+        const newShift = createEmptyShift();
+        
+        // Inherit active infusions from the previous shift
+        const prevKey = getPreviousShiftKey(state.currentBed, state.currentDate, state.currentShift);
+        const prevData = state.balanco[prevKey];
+        
+        if (prevData && prevData.ganhos && prevData.ganhos.length > 0) {
+            const prevShiftName = state.currentShift === 'noturno' ? 'diurno' : 'noturno';
+            const prevHours = SHIFT_HOURS[prevShiftName];
+            
+            prevData.ganhos.forEach(g => {
+                if (!g.descricao) return;
+                
+                let lastVol = 0;
+                let hasRecord = false;
+                
+                if (g.volumes) {
+                    for (let i = prevHours.length - 1; i >= 0; i--) {
+                        const h = prevHours[i];
+                        if (g.volumes[h] !== undefined && g.volumes[h] !== '') {
+                            lastVol = parseFloat(g.volumes[h]);
+                            hasRecord = true;
+                            break;
+                        }
+                    }
+                }
+                
+                let shouldKeep = false;
+                if (hasRecord) {
+                    shouldKeep = lastVol > 0;
+                } else if (parseFloat(g.volume) > 0) {
+                    shouldKeep = true;
+                }
+                
+                if (shouldKeep) {
+                    newShift.ganhos.push({
+                        descricao: g.descricao,
+                        volume: 0,
+                        volumes: {}
+                    });
+                }
+            });
+        }
+        
+        state.balanco[key] = newShift;
     }
     return state.balanco[key];
 }
