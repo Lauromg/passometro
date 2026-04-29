@@ -57,6 +57,11 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+::placeholder {
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
 /* ===== LOGIN SCREEN ===== */
 #login-screen {
   display: flex;

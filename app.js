@@ -309,7 +309,7 @@ function getBalancoSummaryForBed(bedIdx) {
     const diurese = (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
     const drenos = (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
     const hd = parseFloat(data.hd?.ufReal) || 0;
-    const evac = (data.evacuacoes || []).length * 200;
+    const evac = (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
     const perdas = diurese + drenos + hd + evac;
     const bh = ganhos - perdas;
     if (ganhos > 0 || perdas > 0) {
@@ -764,7 +764,7 @@ async function renderBalancoDetail() {
 
     if (totalGanhosCalc === 0) totalGanhosCalc = (data.ganhos || []).reduce((s, g) => s + (parseFloat(g.volume) || 0), 0);
     if (totalPerdasCalc === 0) {
-      const evac = (data.evacuacoes || []).length * 200;
+      const evac = (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
       const hd = parseFloat(data.hd?.ufReal) || 0;
       totalPerdasCalc = totalDiurese + totalDrenos + evac + hd;
     }
@@ -804,6 +804,14 @@ async function renderBalancoDetail() {
       const v = parseFloat(g.valor); if (!isNaN(v)) { hasGlic2 = true; if (v > maxGlic2) maxGlic2 = v; if (v < minGlic2) minGlic2 = v; }
     });
     if (hasGlic2) badges.push(`<span class="resumo-badge resumo-info">ΔGlicemia: ${minGlic2}–${maxGlic2} mg/dL (Δ${maxGlic2 - minGlic2})</span>`);
+
+    if (data.alimentacao && data.alimentacao.length > 0) {
+      badges.push(`<span class="resumo-badge" style="background: rgba(16, 185, 129, 0.1); color: #10b981; border: 1px solid #10b981;">🍎 Alimentação Sólida (${data.alimentacao.length}x)</span>`);
+    }
+    if (data.evacuacoes && data.evacuacoes.length > 0) {
+      const evacVol = data.evacuacoes.reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
+      badges.push(`<span class="resumo-badge resumo-warning">🔄 Evacuações (${data.evacuacoes.length}x - ${evacVol}mL)</span>`);
+    }
 
     if (badges.length > 0) {
       html += `<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">${badges.join('')}</div>`;
@@ -1149,7 +1157,7 @@ async function inserirBalancoNaEvolucao() {
   const diurese = (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
   const drenos = (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
   const hd = parseFloat(data.hd?.ufReal) || 0;
-  const evac = (data.evacuacoes || []).length * 200;
+  const evac = (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
   const perdas = diurese + drenos + hd + evac;
   const bh = ganhos - perdas;
   const sign = bh >= 0 ? '+' : '';
@@ -1166,6 +1174,12 @@ async function inserirBalancoNaEvolucao() {
     details.push(pDetail);
   }
   if (details.length) textoEvo.push('  ' + details.join(' | '));
+  
+  // Alimentação Sólida
+  if (data.alimentacao && data.alimentacao.length > 0) {
+    const alimText = data.alimentacao.map(a => `${a.hora || '--:--'} - ${a.obs || 'S/Obs'}`).join(', ');
+    textoEvo.push(`- Alimentação Sólida: ${alimText}`);
+  }
   
   const textarea = document.getElementById('new-evo-text');
   const addTxt = textoEvo.join('\n');

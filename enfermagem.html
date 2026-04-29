@@ -67,6 +67,7 @@
                     </select>
                     <label style="margin-left:12px;">Data:</label>
                     <input type="date" id="bal-date" onchange="switchDate(this.value)">
+                    <span id="inline-save-status" style="margin-left:16px; font-size:13px; font-weight:600; display:inline-flex; align-items:center;"></span>
                 </div>
             </div>
 
@@ -164,10 +165,27 @@
                         <option value="Vancomicina">
                         <option value="Dieta Enteral">
                         <option value="Água (SNE)">
+                        <option value="Água (VO)">
                     </datalist>
                     <button class="btn btn-primary" style="margin-top:12px;" onclick="addGanhoRow()">+ Adicionar
                         Item</button>
                     <div class="bal-total" id="ganhos-total">Total Ganhos: 0 mL</div>
+                </div>
+
+                <!-- ALIMENTAÇÃO SÓLIDA -->
+                <div class="section-card" style="margin-top: 16px;">
+                    <h3>🍎 Alimentação Sólida</h3>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Registrado para equipe médica e nutrição (não contabiliza no BH).</p>
+                    <table class="sv-table" id="alim-table">
+                        <thead>
+                            <tr>
+                                <th>Hora</th>
+                                <th>Refeição / Aceitação / Obs</th>
+                            </tr>
+                        </thead>
+                        <tbody id="alim-tbody"></tbody>
+                    </table>
+                    <button class="btn btn-primary" style="margin-top:8px;" onclick="addAlimRow()">+ Adicionar Refeição</button>
                 </div>
             </div>
 
@@ -197,6 +215,7 @@
                         <thead>
                             <tr>
                                 <th>Hora</th>
+                                <th>Volume (mL)</th>
                                 <th>Tipo / Obs</th>
                             </tr>
                         </thead>

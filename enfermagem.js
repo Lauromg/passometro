@@ -41,8 +41,9 @@ function createEmptyShift() {
         sinaisVitais: {},   // keyed by hour: { pa, fc, fr, spo2, tax, obs }
         glicemia: [],       // [{ hora, valor, insulina, obs }]
         ganhos: [],         // [{ descricao, volume }]
+        alimentacao: [],    // [{ hora, obs }]
         diurese: [],        // [{ hora, volume }]
-        evacuacoes: [],     // [{ hora, obs }]
+        evacuacoes: [],     // [{ hora, volume, obs }]
         drenos: [],         // [{ nome, volume, aspecto }]
         hd: { ufProg: '', ufReal: '', duracao: '' },
     };
@@ -119,10 +120,24 @@ let saveTimeout = null;
 
 function showSaveIndicator(type, text) {
     const el = document.getElementById('save-indicator');
-    if (!el) return;
-    el.className = 'save-indicator show ' + type;
-    el.textContent = text;
-    setTimeout(() => { el.classList.remove('show'); }, 2000);
+    const inlineEl = document.getElementById('inline-save-status');
+
+    if (el) {
+        el.className = 'save-indicator show ' + type;
+        el.textContent = text;
+        setTimeout(() => { el.classList.remove('show'); }, 2000);
+    }
+    
+    if (inlineEl) {
+        if (type === 'saving') {
+            inlineEl.innerHTML = '<span style="color:var(--accent);">⟳ Salvando...</span>';
+        } else if (type === 'saved') {
+            const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+            inlineEl.innerHTML = `<span style="color:var(--success);">✓ Salvo às ${time}</span>`;
+        } else if (type === 'error') {
+            inlineEl.innerHTML = '<span style="color:var(--danger);">✗ Erro ao salvar</span>';
+        }
+    }
 }
 
 function saveLocal() {
@@ -139,7 +154,7 @@ function loadLocal() {
     return false;
 }
 
-async function saveFirebase() {
+async function saveFirebase(keyToSave = null) {
     if (!window.firebaseDb || !window.firebaseFirestore) {
         console.warn('[ENF] Cannot save: Firebase not ready');
         return;
@@ -148,17 +163,43 @@ async function saveFirebase() {
         console.warn('[ENF] Cannot save: No user logged in');
         return;
     }
+
+    if (!keyToSave) {
+        if (state.currentBed !== null && state.currentDate && state.currentShift) {
+            keyToSave = getShiftKey(state.currentBed, state.currentDate, state.currentShift);
+        } else {
+            return;
+        }
+    }
+
     try {
-        const { doc, setDoc } = window.firebaseFirestore;
+        const { doc, updateDoc, setDoc } = window.firebaseFirestore;
         const db = window.firebaseDb;
         const ref = doc(db, 'passometro/balanco');
+        
+        const shiftData = state.balanco[keyToSave];
+        if (!shiftData) return;
+
         const payload = {
-            data: JSON.parse(JSON.stringify(state.balanco)),
+            [`data.${keyToSave}`]: JSON.parse(JSON.stringify(shiftData)),
             lastUpdate: new Date().toISOString(),
             updatedBy: window.firebaseAuth.currentUser.email,
         };
-        console.log('[ENF] Saving to Firebase passometro/balanco...', Object.keys(state.balanco).length, 'shift keys');
-        await setDoc(ref, payload);
+        console.log('[ENF] Updating Firebase passometro/balanco for key:', keyToSave);
+        
+        try {
+            await updateDoc(ref, payload);
+        } catch (e) {
+            if (e.code === 'not-found') {
+                await setDoc(ref, {
+                    data: { [keyToSave]: JSON.parse(JSON.stringify(shiftData)) },
+                    lastUpdate: new Date().toISOString(),
+                    updatedBy: window.firebaseAuth.currentUser.email,
+                });
+            } else {
+                throw e;
+            }
+        }
         console.log('[ENF] ✓ Saved successfully');
         showSaveIndicator('saved', '✓ Salvo');
     } catch (e) {
@@ -170,17 +211,39 @@ async function saveFirebase() {
 async function loadFirebase() {
     if (!window.firebaseDb || !window.firebaseFirestore || !window.firebaseAuth?.currentUser) return false;
     try {
-        const { doc, getDoc } = window.firebaseFirestore;
+        const { doc, onSnapshot } = window.firebaseFirestore;
         const db = window.firebaseDb;
         const ref = doc(db, 'passometro/balanco');
-        const snap = await getDoc(ref);
-        if (snap.exists() && snap.data().data) {
-            state.balanco = snap.data().data;
-            saveLocal();
-            return true;
-        }
-    } catch (e) { console.error('Firebase load error:', e); }
-    return false;
+        
+        return new Promise((resolve) => {
+            if (window.unsubFirebaseBalanco) window.unsubFirebaseBalanco();
+            
+            window.unsubFirebaseBalanco = onSnapshot(ref, (snap) => {
+                if (snap.exists() && snap.data().data) {
+                    const dbData = snap.data().data;
+                    Object.keys(dbData).forEach(key => {
+                        const currentKey = state.currentBed !== null ? getShiftKey(state.currentBed, state.currentDate, state.currentShift) : null;
+                        if (key !== currentKey || !state.balanco[key]) {
+                            state.balanco[key] = dbData[key];
+                        }
+                    });
+                    saveLocal();
+                    
+                    const viewDash = document.getElementById('view-dashboard');
+                    if (viewDash && viewDash.style.display !== 'none') {
+                        renderDashboard();
+                    }
+                }
+                resolve(true);
+            }, (error) => {
+                console.error('[ENF] Firebase onSnapshot error:', error);
+                resolve(false);
+            });
+        });
+    } catch (e) { 
+        console.error('Firebase load error:', e); 
+        return false;
+    }
 }
 
 async function loadPatientNames() {
@@ -219,12 +282,16 @@ async function loadPatientNames() {
     return false;
 }
 
+let lastEditedKey = null;
 function triggerSave() {
     saveLocal();
+    if (state.currentBed !== null && state.currentDate && state.currentShift) {
+        lastEditedKey = getShiftKey(state.currentBed, state.currentDate, state.currentShift);
+    }
     clearTimeout(saveTimeout);
     saveTimeout = setTimeout(() => {
         showSaveIndicator('saving', '⟳ Salvando...');
-        saveFirebase();
+        saveFirebase(lastEditedKey);
     }, 1500);
 }
 
@@ -289,6 +356,9 @@ function openBed(idx) {
     state.currentShift = (hour >= 7 && hour < 19) ? 'diurno' : 'noturno';
     state.currentDate = todayISO();
 
+    const inlineEl = document.getElementById('inline-save-status');
+    if (inlineEl) inlineEl.innerHTML = '';
+
     document.getElementById('view-dashboard').style.display = 'none';
     document.getElementById('view-balance').style.display = 'block';
 
@@ -326,6 +396,7 @@ function renderAllTabs() {
     renderSinaisVitais();
     renderGlicemia();
     renderGanhos();
+    renderAlimentacao();
     renderPerdas();
     updateResumo();
 }
@@ -493,6 +564,32 @@ function calcTotalGanhos(data) {
     return (data.ganhos || []).reduce((s, g) => s + (parseFloat(g.volume) || 0), 0);
 }
 
+// ===== ALIMENTAÇÃO SÓLIDA =====
+function renderAlimentacao() {
+    const data = getCurrentShiftData();
+    const tbody = document.getElementById('alim-tbody');
+    let html = '';
+    (data.alimentacao || []).forEach((a, i) => {
+        html += `<tr>
+      <td><input type="time" value="${a.hora || ''}" onchange="updateAlim(${i},'hora',this.value)"></td>
+      <td><input type="text" value="${escapeHTML(a.obs || '')}" placeholder="Almoço, bem aceito..." onchange="updateAlim(${i},'obs',this.value)">
+          <button class="row-delete" onclick="deleteAlim(${i})">✕</button></td>
+    </tr>`;
+    });
+    tbody.innerHTML = html;
+}
+
+function addAlimRow() {
+    const data = getCurrentShiftData();
+    if (!data.alimentacao) data.alimentacao = [];
+    data.alimentacao.push({ hora: '', obs: '' });
+    renderAlimentacao();
+    triggerSave();
+}
+
+function updateAlim(i, f, v) { getCurrentShiftData().alimentacao[i][f] = v; triggerSave(); }
+function deleteAlim(i) { getCurrentShiftData().alimentacao.splice(i, 1); renderAlimentacao(); triggerSave(); }
+
 // ===== PERDAS: DIURESE =====
 function renderPerdas() {
     renderDiurese();
@@ -534,6 +631,7 @@ function renderEvac() {
     data.evacuacoes.forEach((e, i) => {
         html += `<tr>
       <td><input type="time" value="${e.hora || ''}" onchange="updateEvac(${i},'hora',this.value)"></td>
+      <td><input type="number" value="${e.volume || ''}" placeholder="200" onchange="updateEvac(${i},'volume',this.value)"></td>
       <td><input type="text" value="${escapeHTML(e.obs || '')}" placeholder="Pastosa, pequeno vol." onchange="updateEvac(${i},'obs',this.value)">
           <button class="row-delete" onclick="deleteEvac(${i})">✕</button></td>
     </tr>`;
@@ -541,9 +639,9 @@ function renderEvac() {
     tbody.innerHTML = html;
 }
 
-function addEvacRow() { getCurrentShiftData().evacuacoes.push({ hora: '', obs: '' }); renderEvac(); triggerSave(); }
-function updateEvac(i, f, v) { getCurrentShiftData().evacuacoes[i][f] = v; triggerSave(); }
-function deleteEvac(i) { getCurrentShiftData().evacuacoes.splice(i, 1); renderEvac(); triggerSave(); }
+function addEvacRow() { getCurrentShiftData().evacuacoes.push({ hora: '', volume: '', obs: '' }); renderEvac(); triggerSave(); }
+function updateEvac(i, f, v) { getCurrentShiftData().evacuacoes[i][f] = v; renderEvac(); updatePerdasTotal(); triggerSave(); }
+function deleteEvac(i) { getCurrentShiftData().evacuacoes.splice(i, 1); renderEvac(); updatePerdasTotal(); triggerSave(); }
 
 // ===== PERDAS: DRENOS =====
 function renderDrenos() {
@@ -593,8 +691,8 @@ function calcTotalPerdas(data) {
     const diurese = calcTotalDiurese(data);
     const drenos = calcTotalDrenos(data);
     const hd = parseFloat(data.hd?.ufReal) || 0;
-    // Evacuações: estimate ~200mL per episode
-    const evac = (data.evacuacoes || []).length * 200;
+    // Evacuações: sum the volume, fallback to 200mL per episode if not specified
+    const evac = (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
     return diurese + drenos + hd + evac;
 }
 
@@ -676,6 +774,14 @@ function generateClinicalSummary(data, bh) {
     });
     if (maxGlic > 180) badges.push({ text: `Hiperglicemia (max ${maxGlic})`, type: 'warning' });
     else if (minGlic < 70 && minGlic < 999) badges.push({ text: `Hipoglicemia (min ${minGlic})`, type: 'danger' });
+
+    if (data.alimentacao && data.alimentacao.length > 0) {
+        badges.push({ text: `🍎 Alimentação Sólida (${data.alimentacao.length}x)`, type: 'success' });
+    }
+    if (data.evacuacoes && data.evacuacoes.length > 0) {
+        const evacVol = data.evacuacoes.reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
+        badges.push({ text: `🔄 Evac (${data.evacuacoes.length}x - ${evacVol}mL)`, type: 'warning' });
+    }
 
     return badges.map(b => `<span class="resumo-badge resumo-${b.type}">${b.text}</span>`).join('');
 }
@@ -772,6 +878,15 @@ function printBalanco() {
     html += `<tr class="print-total"><td colspan="${hours.length + 1}"><strong>TOTAL GANHOS</strong></td><td><strong>${ganhos}</strong></td></tr>`;
     html += `</tbody></table>`;
 
+    // Alimentação Sólida
+    if (data.alimentacao && data.alimentacao.length > 0) {
+        html += `<h4>Alimentação Sólida</h4><table class="print-table"><thead><tr><th>Hora</th><th>Refeição / Obs</th></tr></thead><tbody>`;
+        data.alimentacao.forEach(a => {
+            html += `<tr><td>${a.hora || ''}</td><td>${escapeHTML(a.obs || '')}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+    }
+
     // Perdas
     html += `<h4>Perdas</h4><table class="print-table" style="width:50%;"><thead><tr><th>Descrição</th><th>Vol (mL)</th></tr></thead><tbody>`;
     html += `<tr><td>Diurese</td><td>${calcTotalDiurese(data)}</td></tr>`;
@@ -779,7 +894,10 @@ function printBalanco() {
     const hdReal = parseFloat(data.hd?.ufReal) || 0;
     if (hdReal > 0) html += `<tr><td>Hemodiálise (UF)</td><td>${hdReal}</td></tr>`;
     const evacCount = data.evacuacoes.length;
-    if (evacCount > 0) html += `<tr><td>Evacuações (${evacCount}x)</td><td>~${evacCount * 200}</td></tr>`;
+    if (evacCount > 0) {
+        const evacVol = data.evacuacoes.reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
+        html += `<tr><td>Evacuações (${evacCount}x)</td><td>${evacVol}</td></tr>`;
+    }
     html += `<tr class="print-total"><td><strong>TOTAL PERDAS</strong></td><td><strong>${perdas}</strong></td></tr>`;
     html += `</tbody></table>`;
 
