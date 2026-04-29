@@ -244,24 +244,49 @@ function triggerSave() {
 
 // ===== BALANÇO INTEGRATION =====
 let balancoData = {};
+let unsubscribeBalanco = null;
+let balancoPromise = null;
 
-async function loadBalancoData() {
+function loadBalancoData() {
   if (!window.firebaseDb || !window.firebaseFirestore || !window.firebaseAuth?.currentUser) {
     console.warn('[PASS] Cannot load balanco: Firebase not ready or not logged in');
-    return;
+    return Promise.resolve();
   }
-  try {
-    const { doc, getDoc } = window.firebaseFirestore;
-    const ref = doc(window.firebaseDb, 'passometro/balanco');
-    console.log('[PASS] Loading balance data from passometro/balanco...');
-    const snap = await getDoc(ref);
-    if (snap.exists() && snap.data().data) {
-      balancoData = snap.data().data;
-      console.log('[PASS] ✓ Loaded balance data:', Object.keys(balancoData).length, 'shift keys');
-    } else {
-      console.log('[PASS] No balance data found in Firebase');
+  
+  if (balancoPromise) return balancoPromise;
+
+  balancoPromise = new Promise((resolve) => {
+    try {
+      const { doc, onSnapshot } = window.firebaseFirestore;
+      const ref = doc(window.firebaseDb, 'passometro/balanco');
+      console.log('[PASS] Starting real-time sync for balance data...');
+      
+      if (unsubscribeBalanco) unsubscribeBalanco();
+
+      unsubscribeBalanco = onSnapshot(ref, (snap) => {
+        if (snap.exists() && snap.data().data) {
+          balancoData = snap.data().data;
+          console.log('[PASS] ✓ Balance data updated in real-time');
+          
+          const viewDash = document.getElementById('view-dashboard');
+          if (viewDash && viewDash.style.display !== 'none') {
+            renderDashboard();
+          } else if (state.currentTab === 'balanco') {
+            renderBalancoDetail();
+          }
+        }
+        resolve();
+      }, (err) => {
+        console.warn('[PASS] Real-time balanco error:', err);
+        resolve();
+      });
+    } catch (e) {
+      console.warn('[PASS] Could not setup balanco sync:', e);
+      resolve();
     }
-  } catch (e) { console.warn('[PASS] Could not load balanco:', e); }
+  });
+
+  return balancoPromise;
 }
 
 function getBalancoSummaryForBed(bedIdx) {
@@ -578,7 +603,9 @@ async function renderBalancoDetail() {
   const container = document.getElementById('balanco-detail-content');
   if (!container) return;
 
-  container.innerHTML = '<p style="color:var(--text-muted);font-style:italic;">Carregando dados do balanço...</p>';
+  if (Object.keys(balancoData).length === 0) {
+    container.innerHTML = '<p style="color:var(--text-muted);font-style:italic;">Carregando dados do balanço...</p>';
+  }
   await loadBalancoData();
 
   const bedIdx = state.currentBed;
