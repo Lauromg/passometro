@@ -561,7 +561,13 @@ function updateGanhoTotal() {
 }
 
 function calcTotalGanhos(data) {
-    return (data.ganhos || []).reduce((s, g) => s + (parseFloat(g.volume) || 0), 0);
+    return (data.ganhos || []).reduce((s, g) => {
+        let gVol = parseFloat(g.volume) || 0;
+        if (gVol === 0 && g.volumes && Object.keys(g.volumes).length > 0) {
+            gVol = Object.values(g.volumes).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+        }
+        return s + gVol;
+    }, 0);
 }
 
 // ===== ALIMENTAÇÃO SÓLIDA =====

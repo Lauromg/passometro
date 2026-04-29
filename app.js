@@ -330,13 +330,21 @@ function getBalancoSummaryForBed(bedIdx) {
     if (hasGlic) parts.push(`Glicemia ${minGlic}–${maxGlic} mg/dL (Δ${maxGlic - minGlic})`);
 
     // BH
-    const ganhos = (data.ganhos || []).reduce((s, g) => s + (parseFloat(g.volume) || 0), 0);
+    const ganhos = (data.ganhos || []).reduce((s, g) => {
+      let gVol = parseFloat(g.volume) || 0;
+      if (gVol === 0 && g.volumes && Object.keys(g.volumes).length > 0) {
+        gVol = Object.values(g.volumes).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
+      }
+      return s + gVol;
+    }, 0);
+    
     const diurese = (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
     const drenos = (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
     const hd = parseFloat(data.hd?.ufReal) || 0;
     const evac = (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
     const perdas = diurese + drenos + hd + evac;
     const bh = ganhos - perdas;
+    
     if (ganhos > 0 || perdas > 0) {
       const sign = bh >= 0 ? '+' : '';
       parts.push(`BH ${sign}${bh}mL`);
@@ -568,6 +576,8 @@ function renderPatientView() {
   // Set active tab
   renderTabs();
   renderActiveTabContent();
+
+  setTimeout(resizeAllTextareas, 10);
 }
 
 function renderTabs() {
@@ -583,6 +593,7 @@ function switchTab(tab) {
   state.currentTab = tab;
   renderTabs();
   renderActiveTabContent();
+  setTimeout(resizeAllTextareas, 10);
 }
 
 function renderActiveTabContent() {
@@ -2387,7 +2398,24 @@ function fecharModalQRCode() {
   document.getElementById("modal-qrcode").style.display = "none";
 }
 
+function autoResize(el) {
+  if (!el || el.tagName !== 'TEXTAREA') return;
+  el.style.height = 'auto';
+  el.style.overflow = 'hidden';
+  el.style.height = (el.scrollHeight) + 'px';
+}
+
+function resizeAllTextareas() {
+  document.querySelectorAll('textarea').forEach(el => autoResize(el));
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener('input', (e) => {
+    if (e.target.tagName === 'TEXTAREA') {
+      autoResize(e.target);
+    }
+  });
+
   const modal = document.getElementById("modal-qrcode");
   if (modal) {
     modal.addEventListener("click", (e) => { if (e.target === modal) fecharModalQRCode(); });
