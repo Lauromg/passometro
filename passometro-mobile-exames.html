@@ -576,7 +576,11 @@
     <label>Senha</label>
     <input type="password" id="login-senha" placeholder="••••••••" autocomplete="current-password" />
     <button id="btn-login" onclick="fazerLogin()">Entrar</button>
+    <div style="text-align: center; margin-top: 15px;">
+        <a href="#" onclick="fazerResetSenha(); return false;" style="font-size: 13px; color: var(--marsala); text-decoration: none; font-weight: 600;">Primeiro Acesso / Esqueci minha senha</a>
+    </div>
     <div id="login-erro">E-mail ou senha incorretos.</div>
+    <div id="login-sucesso" style="display: none; background: rgba(34, 197, 94, 0.1); color: #16a34a; padding: 10px; border-radius: 6px; font-size: 13px; margin-top: 15px; border: 1px solid rgba(34, 197, 94, 0.3); text-align: center;"></div>
   </div>
 </div>
 
@@ -846,18 +850,58 @@ function fazerLogin() {
   const senha = document.getElementById("login-senha").value;
   const btn = document.getElementById("btn-login");
   const erro = document.getElementById("login-erro");
+  const sucesso = document.getElementById("login-sucesso");
 
   if (!email || !senha) return;
 
   btn.disabled = true;
   btn.textContent = "Entrando...";
   erro.style.display = "none";
+  if (sucesso) sucesso.style.display = "none";
 
   auth.signInWithEmailAndPassword(email, senha)
     .catch(() => {
       erro.style.display = "block";
       btn.disabled = false;
       btn.textContent = "Entrar";
+    });
+}
+
+function fazerResetSenha() {
+  const email = document.getElementById("login-email").value.trim();
+  const erro = document.getElementById("login-erro");
+  const sucesso = document.getElementById("login-sucesso");
+  
+  erro.style.display = "none";
+  sucesso.style.display = "none";
+
+  if (!email) {
+    erro.textContent = 'Insira seu e-mail acima para redefinir a senha.';
+    erro.style.display = "block";
+    return;
+  }
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    erro.textContent = 'Por favor, insira um e-mail válido.';
+    erro.style.display = "block";
+    return;
+  }
+
+  auth.sendPasswordResetEmail(email)
+    .then(() => {
+      sucesso.textContent = 'Um link de redefinição foi enviado para ' + email + '.';
+      sucesso.style.display = "block";
+    })
+    .catch((error) => {
+      console.error('Erro ao redefinir:', error);
+      erro.style.display = "block";
+      if (error.code === 'auth/user-not-found') {
+          erro.textContent = 'E-mail não cadastrado no sistema.';
+      } else if (error.code === 'auth/invalid-email') {
+          erro.textContent = 'Formato de e-mail inválido.';
+      } else {
+          erro.textContent = 'Erro ao tentar enviar e-mail.';
+      }
     });
 }
 

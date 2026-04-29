@@ -27,7 +27,11 @@
                 <input type="password" id="login-password" placeholder="••••••••">
             </div>
             <button class="btn-login" id="btn-login">Entrar</button>
+            <div style="text-align: center; margin-top: 15px;">
+                <a href="#" id="btn-reset-password" style="font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 500;">Primeiro Acesso / Esqueci minha senha</a>
+            </div>
             <div class="login-error" id="login-error">Credenciais incorretas.</div>
+            <div class="login-success" id="login-success" style="display: none; background: rgba(34, 197, 94, 0.1); color: var(--success); padding: 10px; border-radius: 6px; font-size: 13px; margin-top: 15px; border: 1px solid rgba(34, 197, 94, 0.3);"></div>
         </div>
     </div>
 
@@ -311,7 +315,7 @@
     <!-- FIREBASE -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, sendPasswordResetEmail } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -358,6 +362,45 @@
 
         document.getElementById('login-password').addEventListener('keydown', (e) => {
             if (e.key === 'Enter') btnLogin.click();
+        });
+
+        const btnResetPassword = document.getElementById('btn-reset-password');
+        const loginSuccess = document.getElementById('login-success');
+
+        btnResetPassword.addEventListener('click', (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            loginError.style.display = 'none';
+            loginSuccess.style.display = 'none';
+
+            if (!email) {
+                loginError.textContent = 'Por favor, insira seu e-mail no campo acima para redefinir a senha.';
+                loginError.style.display = 'block';
+                return;
+            }
+
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                loginError.textContent = 'Por favor, insira um e-mail válido.';
+                loginError.style.display = 'block';
+                return;
+            }
+
+            sendPasswordResetEmail(auth, email)
+                .then(() => {
+                    loginSuccess.textContent = 'Um link de redefinição foi enviado para ' + email + '. Verifique sua caixa de entrada e defina sua senha.';
+                    loginSuccess.style.display = 'block';
+                })
+                .catch((error) => {
+                    console.error('Password reset error:', error);
+                    loginError.style.display = 'block';
+                    if (error.code === 'auth/user-not-found') {
+                        loginError.textContent = 'E-mail não cadastrado no sistema.';
+                    } else if (error.code === 'auth/invalid-email') {
+                        loginError.textContent = 'Formato de e-mail inválido.';
+                    } else {
+                        loginError.textContent = 'Erro ao tentar enviar e-mail. Tente novamente mais tarde.';
+                    }
+                });
         });
     </script>
 
