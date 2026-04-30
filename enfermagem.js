@@ -907,8 +907,24 @@ function printBalanco() {
     html += `<tr class="print-total"><td><strong>TOTAL PERDAS</strong></td><td><strong>${perdas}</strong></td></tr>`;
     html += `</tbody></table>`;
 
-    // BH Result
-    html += `<div class="print-bh-result"><strong>BALANÇO HÍDRICO: ${sign}${bh} mL</strong></div>`;
+    // BH 24h Result
+    let ganhos24h = 0;
+    let perdas24h = 0;
+    ['diurno', 'noturno'].forEach(shift => {
+        const key = getShiftKey(state.currentBed, state.currentDate, shift);
+        const shiftData = state.balanco[key];
+        if (shiftData) {
+            ganhos24h += calcTotalGanhos(shiftData);
+            perdas24h += calcTotalPerdas(shiftData);
+        }
+    });
+    const bh24h = ganhos24h - perdas24h;
+    const sign24h = bh24h >= 0 ? '+' : '';
+
+    html += `<div class="print-bh-result" style="margin-top: 15px;">
+      <div style="margin-bottom: 5px;"><strong>BALANÇO HÍDRICO (Turno Atual): ${sign}${bh} mL</strong></div>
+      <div style="font-size: 1.2em;"><strong>BALANÇO HÍDRICO (24h - Dia ${formatDateBR(new Date(state.currentDate + 'T12:00:00'))}): ${sign24h}${bh24h} mL</strong></div>
+    </div>`;
 
     // Signature
     html += `

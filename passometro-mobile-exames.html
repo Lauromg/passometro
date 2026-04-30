@@ -737,8 +737,8 @@ const GRUPOS_EXAMES = [
       { id: "po2",   label: "pO2",   unidade: "mmHg",   apelidos: ["po2", "pao2"] },
       { id: "pco2",  label: "pCO2",  unidade: "mmHg",   apelidos: ["pco2", "paco2"] },
       { id: "hco3",  label: "HCO3",  unidade: "mEq/L",  apelidos: ["bicarbonato", "hco3"] },
-      { id: "be",    label: "BE",    unidade: "mEq/L",  apelidos: ["base excess", "excesso de base"] },
-      { id: "sat",   label: "Sat",   unidade: "%",      apelidos: ["saturação", "saturacao", "sato2"] },
+      { id: "be",    label: "BE",    unidade: "mEq/L",  apelidos: ["base excess", "excesso de base", "be"] },
+      { id: "sat",   label: "Sat",   unidade: "%",      apelidos: ["saturação", "saturacao", "sato2", "so2"] },
     ]
   },
   {
@@ -1106,7 +1106,11 @@ function processarTexto() {
   GRUPOS_EXAMES.forEach(grupo => {
     grupo.exames.forEach(exame => {
       // Label principal
-      mapaApelidos[removerAcentos(exame.label.toLowerCase())] = exame.id;
+      const labelNormalizado = removerAcentos(exame.label.toLowerCase());
+      // Evitar que a letra "P" (Fósforo) roube a interpretação de pCO2 ou pO2 soletrados
+      if (labelNormalizado !== 'p') {
+        mapaApelidos[labelNormalizado] = exame.id;
+      }
       // Apelidos
       exame.apelidos.forEach(ap => {
         mapaApelidos[removerAcentos(ap.toLowerCase())] = exame.id;
@@ -1121,24 +1125,29 @@ function processarTexto() {
   const reconhecidos = {};
   const naoReconhecidos = [];
 
-  // Regex: 1 a 4 palavras (letras + acentos), separador opcional, depois número
-  // Ex: "Hb 13", "creatinina: 1,2", "sódio = 140", "proteína c reativa 5"
-  const reLetra = '[a-zÀ-ÿ]+';
+  // Regex: 1 a 4 palavras (letras, acentos E números para exames como pCO2, pO2), separador opcional
+  // Ex: "Hb 13", "pco2: 45", "sódio = 140", "be -2", "p o 2 90"
+  const rePalavra = '[a-zÀ-ÿ0-9]+';
   const regex = new RegExp(
-    '(' + reLetra + '(?:\\s+' + reLetra + '){0,3})' +
-    '\\s*[:\\-=]?\\s*' +
-    '(-?\\d+[.,]?\\d*)',
+    '(' + rePalavra + '(?:\\s+' + rePalavra + '){0,3})' +
+    '(?:\\s+[:\\-=]?\\s*|\\s*[:\\-=]\\s*)' +
+    '(-?\\s*\\d+[.,]?\\d*)',
     'gi'
   );
   let match;
 
   while ((match = regex.exec(texto)) !== null) {
     const termoRaw = match[1].trim();
-    const valor = match[2].replace(",", ".");
+    // Remover espaços do valor para lidar com " - 2" ao invés de "-2"
+    const valor = match[2].replace(",", ".").replace(/\s+/g, "");
     const termo = removerAcentos(termoRaw.toLowerCase());
+    const termoSemEspaco = termo.replace(/\s+/g, '');
 
     if (mapaApelidos[termo]) {
       reconhecidos[mapaApelidos[termo]] = parseFloat(valor);
+    } else if (mapaApelidos[termoSemEspaco]) {
+      // Tentar match sem espaços (ex: "p c o 2" -> "pco2")
+      reconhecidos[mapaApelidos[termoSemEspaco]] = parseFloat(valor);
     } else {
       let encontrado = false;
       // Tentar cada palavra individual do termo (ex: "proteína c reativa" → testa "pcr")

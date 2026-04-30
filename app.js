@@ -291,46 +291,40 @@ function loadBalancoData() {
 
 function getBalancoSummaryForBed(bedIdx) {
   const today = formatDateISO(new Date());
-  const parts = [];
+  
+  let maxTemp = 0, hasTemp = false, feverEps = 0, hypothermiaEps = 0;
+  let maxPAS = 0, minPAS = 999, maxFC = 0, minFC = 999, hasPAS = false, hasFC = false;
+  let maxGlic = 0, minGlic = 9999, hasGlic = false;
+  
+  let ganhos = 0, diurese = 0, drenos = 0, hd = 0, evac = 0;
+  let hasData = false;
 
   ['diurno', 'noturno'].forEach(shift => {
     const key = `${bedIdx}_${today}_${shift}`;
     const data = balancoData[key];
     if (!data) return;
+    
+    hasData = true;
 
     // Temperature
-    let maxTemp = 0, hasTemp = false, feverEps = 0, hypothermiaEps = 0;
     Object.values(data.sinaisVitais || {}).forEach(sv => {
       const t = parseFloat((sv.tax || '').replace(',', '.'));
       if (!isNaN(t)) { hasTemp = true; if (t > maxTemp) maxTemp = t; if (t >= 37.8) feverEps++; if (t < 36.0) hypothermiaEps++; }
     });
-    if (hasTemp) {
-      if (feverEps === 0 && hypothermiaEps === 0) {
-        parts.push('Afebril');
-      } else {
-        if (feverEps > 0) parts.push(`${feverEps} episódio${feverEps > 1 ? 's' : ''} febril${feverEps > 1 ? 's' : ''}`);
-        if (hypothermiaEps > 0) parts.push(`${hypothermiaEps} episódio${hypothermiaEps > 1 ? 's' : ''} de hipotermia`);
-      }
-    }
 
     // Hemodynamic
-    let maxPAS = 0, minPAS = 999, maxFC = 0, minFC = 999, hasPAS = false, hasFC = false;
     Object.values(data.sinaisVitais || {}).forEach(sv => {
       if (sv.pa) { const p = parseInt(sv.pa.split('/')[0]); if (!isNaN(p)) { hasPAS = true; if (p > maxPAS) maxPAS = p; if (p < minPAS) minPAS = p; } }
       const fc = parseInt(sv.fc); if (!isNaN(fc)) { hasFC = true; if (fc > maxFC) maxFC = fc; if (fc < minFC) minFC = fc; }
     });
-    if (hasPAS) parts.push(`PA ${minPAS}–${maxPAS} mmHg (Δ${maxPAS - minPAS})`);
-    if (hasFC) parts.push(`FC ${minFC}–${maxFC} bpm (Δ${maxFC - minFC})`);
 
     // Glycemia delta
-    let maxGlic = 0, minGlic = 9999, hasGlic = false;
     (data.glicemia || []).forEach(g => {
       const v = parseFloat(g.valor); if (!isNaN(v)) { hasGlic = true; if (v > maxGlic) maxGlic = v; if (v < minGlic) minGlic = v; }
     });
-    if (hasGlic) parts.push(`Glicemia ${minGlic}–${maxGlic} mg/dL (Δ${maxGlic - minGlic})`);
 
     // BH
-    const ganhos = (data.ganhos || []).reduce((s, g) => {
+    ganhos += (data.ganhos || []).reduce((s, g) => {
       let gVol = parseFloat(g.volume) || 0;
       if (gVol === 0 && g.volumes && Object.keys(g.volumes).length > 0) {
         gVol = Object.values(g.volumes).reduce((sum, v) => sum + (parseFloat(v) || 0), 0);
@@ -338,19 +332,37 @@ function getBalancoSummaryForBed(bedIdx) {
       return s + gVol;
     }, 0);
     
-    const diurese = (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
-    const drenos = (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
-    const hd = parseFloat(data.hd?.ufReal) || 0;
-    const evac = (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
-    const perdas = diurese + drenos + hd + evac;
-    const bh = ganhos - perdas;
-    
-    if (ganhos > 0 || perdas > 0) {
-      const sign = bh >= 0 ? '+' : '';
-      parts.push(`BH ${sign}${bh}mL`);
-      if (diurese > 0) parts.push(`Diurese ${diurese}mL`);
-    }
+    diurese += (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
+    drenos += (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
+    hd += parseFloat(data.hd?.ufReal) || 0;
+    evac += (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
   });
+
+  if (!hasData) return '';
+
+  const parts = [];
+
+  if (hasTemp) {
+    if (feverEps === 0 && hypothermiaEps === 0) {
+      parts.push('Afebril');
+    } else {
+      if (feverEps > 0) parts.push(`${feverEps} episódio${feverEps > 1 ? 's' : ''} febril${feverEps > 1 ? 's' : ''}`);
+      if (hypothermiaEps > 0) parts.push(`${hypothermiaEps} episódio${hypothermiaEps > 1 ? 's' : ''} de hipotermia`);
+    }
+  }
+
+  if (hasPAS) parts.push(`PA ${minPAS}–${maxPAS} mmHg (Δ${maxPAS - minPAS})`);
+  if (hasFC) parts.push(`FC ${minFC}–${maxFC} bpm (Δ${maxFC - minFC})`);
+  if (hasGlic) parts.push(`Glicemia ${minGlic}–${maxGlic} mg/dL (Δ${maxGlic - minGlic})`);
+
+  const perdas = diurese + drenos + hd + evac;
+  const bh = ganhos - perdas;
+  
+  if (ganhos > 0 || perdas > 0) {
+    const sign = bh >= 0 ? '+' : '';
+    parts.push(`BH 24h: ${sign}${bh}mL`);
+    if (diurese > 0) parts.push(`Diurese ${diurese}mL`);
+  }
 
   return parts.length > 0 ? parts.join(' • ') : '';
 }
@@ -1144,31 +1156,55 @@ async function inserirBalancoNaEvolucao() {
     }
   }
 
-  const shiftBtn = document.querySelector('.shift-toggle button.active-day') || document.querySelector('.shift-toggle button.active-night');
-  const evoShift = shiftBtn ? shiftBtn.dataset.shift : 'day';
-  const dataShift = evoShift === 'day' ? 'diurno' : 'noturno';
+  const shifts = ['diurno', 'noturno'];
   
-  const key = `${bedIdx}_${searchDateISO}_${dataShift}`;
-  const data = balancoData[key];
+  let maxTemp = 0, feverEps = 0, hypothermiaEps = 0;
+  let maxPAS = 0, minPAS = 999, maxFC = 0, minFC = 999;
+  let hasTemp = false, hasPAS = false, hasFC = false;
+  let maxGlic = 0, minGlic = 9999, hasGlic = false;
   
-  if (!data) {
-    alert(`Nenhum dado de balanço encontrado para o turno ${dataShift === 'diurno' ? 'Diurno' : 'Noturno'} na data ${searchDateISO}.`);
+  let ganhos = 0, diurese = 0, drenos = 0, hd = 0, evac = 0;
+  let evacCount = 0;
+  let alimentacao = [];
+  
+  let hasData = false;
+
+  shifts.forEach(shift => {
+    const key = `${bedIdx}_${searchDateISO}_${shift}`;
+    const data = balancoData[key];
+    if (!data) return;
+    
+    hasData = true;
+
+    Object.values(data.sinaisVitais || {}).forEach(sv => {
+      const t = parseFloat((sv.tax || '').replace(',', '.'));
+      if (!isNaN(t)) { hasTemp = true; if (t > maxTemp) maxTemp = t; if (t >= 37.8) feverEps++; if (t < 36.0) hypothermiaEps++; }
+      if (sv.pa) { const p = parseInt(sv.pa.split('/')[0]); if (!isNaN(p)) { hasPAS = true; if (p > maxPAS) maxPAS = p; if (p < minPAS) minPAS = p; } }
+      const fc = parseInt(sv.fc); if (!isNaN(fc)) { hasFC = true; if (fc > maxFC) maxFC = fc; if (fc < minFC) minFC = fc; }
+    });
+
+    (data.glicemia || []).forEach(g => {
+      const v = parseFloat(g.valor); if (!isNaN(v)) { hasGlic = true; if (v > maxGlic) maxGlic = v; if (v < minGlic) minGlic = v; }
+    });
+
+    ganhos += (data.ganhos || []).reduce((s, g) => s + (parseFloat(g.volume) || 0), 0);
+    diurese += (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
+    drenos += (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
+    hd += parseFloat(data.hd?.ufReal) || 0;
+    evac += (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
+    evacCount += (data.evacuacoes || []).length;
+    
+    if (data.alimentacao) {
+      alimentacao = alimentacao.concat(data.alimentacao);
+    }
+  });
+
+  if (!hasData) {
+    alert(`Nenhum dado de balanço (24h) encontrado na data ${searchDateISO}.`);
     return;
   }
   
   let textoEvo = [];
-  
-  // Sinais Vitais
-  let maxTemp = 0, feverEps = 0, hypothermiaEps = 0;
-  let maxPAS = 0, minPAS = 999, maxFC = 0, minFC = 999;
-  let hasTemp = false, hasPAS = false, hasFC = false;
-  
-  Object.values(data.sinaisVitais || {}).forEach(sv => {
-    const t = parseFloat((sv.tax || '').replace(',', '.'));
-    if (!isNaN(t)) { hasTemp = true; if (t > maxTemp) maxTemp = t; if (t >= 37.8) feverEps++; if (t < 36.0) hypothermiaEps++; }
-    if (sv.pa) { const p = parseInt(sv.pa.split('/')[0]); if (!isNaN(p)) { hasPAS = true; if (p > maxPAS) maxPAS = p; if (p < minPAS) minPAS = p; } }
-    const fc = parseInt(sv.fc); if (!isNaN(fc)) { hasFC = true; if (fc > maxFC) maxFC = fc; if (fc < minFC) minFC = fc; }
-  });
   
   const vitalsText = [];
   if (hasTemp) {
@@ -1183,39 +1219,29 @@ async function inserirBalancoNaEvolucao() {
   
   if (vitalsText.length) textoEvo.push('- Sinais Vitais: ' + vitalsText.join(' | '));
   
-  // Glicemia
-  let maxGlic = 0, minGlic = 9999, hasGlic = false;
-  (data.glicemia || []).forEach(g => {
-    const v = parseFloat(g.valor); if (!isNaN(v)) { hasGlic = true; if (v > maxGlic) maxGlic = v; if (v < minGlic) minGlic = v; }
-  });
   if (hasGlic) textoEvo.push(`- ΔGlicemia: ${minGlic}-${maxGlic} mg/dL (Δ${maxGlic-minGlic})`);
   
   // Balanço
-  const ganhos = (data.ganhos || []).reduce((s, g) => s + (parseFloat(g.volume) || 0), 0);
-  const diurese = (data.diurese || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
-  const drenos = (data.drenos || []).reduce((s, d) => s + (parseFloat(d.volume) || 0), 0);
-  const hd = parseFloat(data.hd?.ufReal) || 0;
-  const evac = (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
   const perdas = diurese + drenos + hd + evac;
   const bh = ganhos - perdas;
   const sign = bh >= 0 ? '+' : '';
   
-  textoEvo.push(`- Balanço Hídrico: ${sign}${bh} mL`);
+  textoEvo.push(`- Balanço Hídrico (24h): ${sign}${bh} mL`);
   const details = [];
   if (ganhos > 0) details.push(`Ganhos: ${ganhos}mL`);
   if (perdas > 0) {
     let pDetail = `Perdas: ${perdas}mL (Diurese: ${diurese}mL`;
     if (drenos > 0) pDetail += `, Drenos: ${drenos}mL`;
     if (hd > 0) pDetail += `, HD: ${hd}mL`;
-    if (evac > 0) pDetail += `, Evac: ${(data.evacuacoes||[]).length}x`;
+    if (evac > 0) pDetail += `, Evac: ${evacCount}x`;
     pDetail += `)`;
     details.push(pDetail);
   }
   if (details.length) textoEvo.push('  ' + details.join(' | '));
   
   // Alimentação Sólida
-  if (data.alimentacao && data.alimentacao.length > 0) {
-    const alimText = data.alimentacao.map(a => `${a.hora || '--:--'} - ${a.obs || 'S/Obs'}`).join(', ');
+  if (alimentacao && alimentacao.length > 0) {
+    const alimText = alimentacao.map(a => `${a.hora || '--:--'} - ${a.obs || 'S/Obs'}`).join(', ');
     textoEvo.push(`- Alimentação Sólida: ${alimText}`);
   }
   
