@@ -46,48 +46,56 @@ const DRUG_SOLUTIONS = {
 
 const EXAM_FIELDS = [
   // Hemograma
-  { id: 'hb', name: 'Hb', unit: 'g/dL' },
-  { id: 'ht', name: 'Ht', unit: '%' },
-  { id: 'leuco', name: 'Global', unit: '/mm³' },
-  { id: 'mielocitos', name: 'Mielócitos', unit: '' },
-  { id: 'metamielocitos', name: 'Metamielócitos', unit: '' },
-  { id: 'bastonetes', name: 'Bastonetes', unit: '' },
-  { id: 'segmentados', name: 'Segmentados', unit: '' },
-  { id: 'eosinofilos', name: 'Eosinófilos', unit: '' },
-  { id: 'linf', name: 'Linfócitos', unit: '' },
-  { id: 'mono', name: 'Monócitos', unit: '' },
-  { id: 'plaq', name: 'Plaquetas', unit: 'mil' },
+  { id: 'hb', name: 'Hb', unit: 'g/dL', category: 'Hemograma', min: 11, max: 18 },
+  { id: 'ht', name: 'Ht', unit: '%', category: 'Hemograma', min: 35, max: 50 },
+  { id: 'leuco', name: 'Global', unit: '/mm³', category: 'Hemograma', min: 4000, max: 12000 },
+  { id: 'mielocitos', name: 'Mielócitos', unit: '', category: 'Hemograma', max: 0 },
+  { id: 'metamielocitos', name: 'Metamielócitos', unit: '', category: 'Hemograma', max: 0 },
+  { id: 'bastonetes', name: 'Bastonetes', unit: '', category: 'Hemograma', max: 5 },
+  { id: 'segmentados', name: 'Segmentados', unit: '', category: 'Hemograma' },
+  { id: 'eosinofilos', name: 'Eosinófilos', unit: '', category: 'Hemograma' },
+  { id: 'linf', name: 'Linfócitos', unit: '', category: 'Hemograma' },
+  { id: 'mono', name: 'Monócitos', unit: '', category: 'Hemograma' },
+  { id: 'plaq', name: 'Plaquetas', unit: 'mil', category: 'Hemograma', min: 150000, max: 450000 },
+  
   // Gasometria
-  { id: 'ph', name: 'pH', unit: '' },
-  { id: 'po2', name: 'pO2', unit: 'mmHg' },
-  { id: 'pco2', name: 'pCO2', unit: 'mmHg' },
-  { id: 'hco3', name: 'HCO3', unit: 'mEq/L' },
-  { id: 'be', name: 'BE', unit: 'mEq/L' },
-  { id: 'sat', name: 'Sat', unit: '%' },
-  // Função Renal e Outros
-  { id: 'ur', name: 'Ur', unit: 'mg/dL' },
-  { id: 'cr', name: 'Cr', unit: 'mg/dL' },
-  { id: 'na', name: 'Na', unit: 'mEq/L' },
-  { id: 'k', name: 'K', unit: 'mEq/L' },
-  { id: 'ca', name: 'Ca', unit: 'mEq/L' },
-  { id: 'mg', name: 'Mg', unit: 'mEq/L' },
-  { id: 'cl', name: 'Cl', unit: 'mEq/L' },
-  { id: 'p', name: 'P', unit: 'mEq/L' },
-  { id: 'tppa', name: 'TPPa', unit: '' },
-  { id: 'inr', name: 'INR', unit: '' },
-  { id: 'cpk', name: 'CPK', unit: 'U/L' },
-  { id: 'tgo', name: 'TGO', unit: 'U/L' },
-  { id: 'tgp', name: 'TGP', unit: 'U/L' },
-  { id: 'bd', name: 'BD', unit: 'mg/dL' },
-  { id: 'bi', name: 'BI', unit: 'mg/dL' },
-  { id: 'ggt', name: 'GGT', unit: 'U/L' },
-  { id: 'fa', name: 'FA', unit: 'U/L' },
-  { id: 'alb', name: 'Alb', unit: 'g/dL' },
-  { id: 'pcr', name: 'PCR', unit: 'mg/L' },
-  { id: 'lactato', name: 'Lactato', unit: 'mmol/L' },
-  { id: 'svo2', name: 'SVO2', unit: '%' },
-  { id: 'gap_co2', name: 'GAP CO2', unit: 'mmHg' },
-  { id: 'troponina', name: 'Troponina', unit: 'ng/mL' }
+  { id: 'ph', name: 'pH', unit: '', category: 'Gasometria', min: 7.35, max: 7.45 },
+  { id: 'po2', name: 'pO2', unit: 'mmHg', category: 'Gasometria', min: 60 },
+  { id: 'pco2', name: 'pCO2', unit: 'mmHg', category: 'Gasometria', min: 35, max: 45 },
+  { id: 'hco3', name: 'HCO3', unit: 'mEq/L', category: 'Gasometria', min: 22, max: 26 },
+  { id: 'be', name: 'BE', unit: 'mEq/L', category: 'Gasometria', min: -2, max: 2 },
+  { id: 'sat', name: 'Sat', unit: '%', category: 'Gasometria', min: 92 },
+  { id: 'lactato', name: 'Lactato', unit: 'mmol/L', category: 'Gasometria', max: 2 },
+  { id: 'svo2', name: 'SVO2', unit: '%', category: 'Gasometria', min: 65 },
+  { id: 'gap_co2', name: 'GAP CO2', unit: 'mmHg', category: 'Gasometria' },
+  
+  // Função Renal e Eletrólitos
+  { id: 'ur', name: 'Ur', unit: 'mg/dL', category: 'Função Renal e Eletrólitos', max: 50 },
+  { id: 'cr', name: 'Cr', unit: 'mg/dL', category: 'Função Renal e Eletrólitos', max: 1.2 },
+  { id: 'na', name: 'Na', unit: 'mEq/L', category: 'Função Renal e Eletrólitos', min: 135, max: 145 },
+  { id: 'k', name: 'K', unit: 'mEq/L', category: 'Função Renal e Eletrólitos', min: 3.5, max: 5.1 },
+  { id: 'ca', name: 'Ca', unit: 'mEq/L', category: 'Função Renal e Eletrólitos', min: 8.5, max: 10.5 },
+  { id: 'mg', name: 'Mg', unit: 'mEq/L', category: 'Função Renal e Eletrólitos', min: 1.7, max: 2.2 },
+  { id: 'cl', name: 'Cl', unit: 'mEq/L', category: 'Função Renal e Eletrólitos', min: 96, max: 106 },
+  { id: 'p', name: 'P', unit: 'mEq/L', category: 'Função Renal e Eletrólitos', min: 2.5, max: 4.5 },
+  
+  // Coagulação
+  { id: 'tppa', name: 'TPPa', unit: '', category: 'Coagulação' },
+  { id: 'inr', name: 'INR', unit: '', category: 'Coagulação' },
+  
+  // Cardíaco / Muscular
+  { id: 'cpk', name: 'CPK', unit: 'U/L', category: 'Cardíaco / Muscular' },
+  { id: 'tgo', name: 'TGO', unit: 'U/L', category: 'Cardíaco / Muscular', max: 40 },
+  { id: 'tgp', name: 'TGP', unit: 'U/L', category: 'Cardíaco / Muscular', max: 40 },
+  { id: 'troponina', name: 'Troponina', unit: 'ng/mL', category: 'Cardíaco / Muscular' },
+  
+  // Hepático / Inflamação / Outros
+  { id: 'bd', name: 'BD', unit: 'mg/dL', category: 'Hepático / Inflamação' },
+  { id: 'bi', name: 'BI', unit: 'mg/dL', category: 'Hepático / Inflamação' },
+  { id: 'ggt', name: 'GGT', unit: 'U/L', category: 'Hepático / Inflamação' },
+  { id: 'fa', name: 'FA', unit: 'U/L', category: 'Hepático / Inflamação' },
+  { id: 'alb', name: 'Alb', unit: 'g/dL', category: 'Hepático / Inflamação', min: 3.5 },
+  { id: 'pcr', name: 'PCR', unit: 'mg/L', category: 'Hepático / Inflamação', max: 5 }
 ];
 
 // ===== SMART CASE =====
@@ -1363,6 +1371,105 @@ async function inserirInfusoesNaEvolucao() {
   }
 }
 
+function isExamAltered(field, rawVal) {
+  if (!rawVal || rawVal.trim() === '') return false;
+  const num = parseFloat(rawVal.toString().replace(',', '.'));
+  if (isNaN(num)) return false;
+  if (field.min !== undefined && num < field.min) return true;
+  if (field.max !== undefined && num > field.max) return true;
+  return false;
+}
+
+function inserirExamesNaEvolucao() {
+  const bedIdx = state.currentBed;
+  if (bedIdx === null) return;
+
+  const bed = state.beds[bedIdx];
+  if (!bed) return;
+
+  if (!bed.exams || bed.exams.length === 0) {
+    alert('Nenhum exame registrado para este paciente.');
+    return;
+  }
+
+  // Pegar a data selecionada na evolução ou a data de hoje
+  let dateStr = document.getElementById('new-evo-date').value.trim();
+  let searchDateISO = formatDateISO(new Date());
+  if (dateStr) {
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      searchDateISO = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+  }
+
+  // Ordenar exames por data (mais recente primeiro)
+  const sortedExams = [...bed.exams]
+    .filter(e => e.date) // só os que têm data
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  if (sortedExams.length === 0) {
+    alert('Nenhum exame com data registrado.');
+    return;
+  }
+
+  // Tentar primeiro a data exata, depois o mais recente
+  let targetExam = sortedExams.find(e => e.date === searchDateISO);
+  if (!targetExam) {
+    // Usar o mais recente disponível
+    targetExam = sortedExams[0];
+  }
+
+  // Formatar a data em BR para exibição
+  const [y, m, d] = targetExam.date.split('-');
+  const dataBR = `${d}/${m}/${y}`;
+
+  // Construir o texto por categorias
+  const categorias = {};
+  EXAM_FIELDS.forEach(f => {
+    const val = targetExam[f.id];
+    if (val === undefined || val === null || val.toString().trim() === '') return;
+    const cat = f.category || 'Outros';
+    if (!categorias[cat]) categorias[cat] = [];
+    const altered = isExamAltered(f, val);
+    categorias[cat].push({ f, val, altered });
+  });
+
+  // Incluir exames customizados
+  if (bed.customExams && bed.customExams.length > 0) {
+    bed.customExams.forEach(ce => {
+      const val = targetExam[ce.id];
+      if (val === undefined || val === null || val.toString().trim() === '') return;
+      if (!categorias['Outros']) categorias['Outros'] = [];
+      categorias['Outros'].push({ f: { name: ce.name, unit: '' }, val, altered: false });
+    });
+  }
+
+  if (Object.keys(categorias).length === 0) {
+    alert(`Nenhum valor preenchido nos exames de ${dataBR}.`);
+    return;
+  }
+
+  // Montar o texto linha por linha, uma linha por categoria
+  const linhas = [];
+  Object.keys(categorias).forEach(cat => {
+    const items = categorias[cat];
+    const partes = items.map(({ f, val, altered }) => {
+      const label = f.name;
+      const display = altered ? `*${val}*` : val;
+      return `${label}: ${display}`;
+    });
+    linhas.push(`(${dataBR}) [${cat}] ${partes.join(' | ')} |`);
+  });
+
+  const addTxt = linhas.join('\n');
+  const textarea = document.getElementById('new-evo-text');
+  if (textarea.value.trim() !== '') {
+    textarea.value += '\n\n' + addTxt;
+  } else {
+    textarea.value = addTxt;
+  }
+}
+
 function selectShift(shift) {
   document.querySelectorAll('.shift-toggle button').forEach(btn => {
     btn.className = btn.dataset.shift === shift
@@ -1810,19 +1917,43 @@ function renderExames(bed) {
   // -- TBODY: Rows for each field
   html += '<tbody>';
   
-  // Default list
-  EXAM_FIELDS.forEach((f, rIndex) => {
-    const bg = (rIndex % 2 === 0) ? '' : 'background: rgba(0,0,0,0.02);';
-    html += `<tr style="border-bottom:1px solid var(--border); ${bg}">`;
-    html += `<td style="padding:8px; font-size:13px; font-weight:600; color:var(--text-primary); position:sticky; left:0; background:var(--bg-card); z-index:1; border-right:1px solid var(--border);">${f.name} <span style="font-size:10px; color:var(--text-muted); font-weight:normal;">${f.unit ? `(${f.unit})` : ''}</span></td>`;
+  // Group fields by category
+  const categories = {};
+  EXAM_FIELDS.forEach(f => {
+    const cat = f.category || 'Outros';
+    if (!categories[cat]) categories[cat] = [];
+    categories[cat].push(f);
+  });
+
+  let rIndex = 0;
+  Object.keys(categories).forEach(cat => {
+    html += `<tr style="border-bottom:1px solid var(--border); background:rgba(13,91,143,0.05);"><td colspan="${sortedExams.length + 2}" style="padding:8px 12px; font-weight:700; color:var(--accent); font-size:12px; text-transform:uppercase; position:sticky; left:0; z-index:1;">${cat}</td></tr>`;
     
-    sortedExams.forEach((exam, cIdx) => {
-      const origIdx = bed.exams.findIndex(e => e === exam);
-      html += `<td style="padding:6px; border-right:1px solid var(--border);">`;
-      html += `<input type="text" value="${escapeAttr(exam[f.id] || '')}" onchange="updateExam(${origIdx},'${f.id}',this.value)" class="exam-value-input" data-row="${rIndex}" data-col="${cIdx}" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center;">`;
-      html += `</td>`;
+    categories[cat].forEach((f) => {
+      const bg = (rIndex % 2 === 0) ? '' : 'background: rgba(0,0,0,0.02);';
+      html += `<tr style="border-bottom:1px solid var(--border); ${bg}">`;
+      html += `<td style="padding:8px; font-size:13px; font-weight:600; color:var(--text-primary); position:sticky; left:0; background:var(--bg-card); z-index:1; border-right:1px solid var(--border);">${f.name} <span style="font-size:10px; color:var(--text-muted); font-weight:normal;">${f.unit ? `(${f.unit})` : ''}</span></td>`;
+      
+      sortedExams.forEach((exam, cIdx) => {
+        const origIdx = bed.exams.findIndex(e => e === exam);
+        const val = exam[f.id] || '';
+        let isAltered = false;
+        if (val !== '') {
+          const num = parseFloat(val.replace(',', '.'));
+          if (!isNaN(num)) {
+            if (f.min !== undefined && num < f.min) isAltered = true;
+            if (f.max !== undefined && num > f.max) isAltered = true;
+          }
+        }
+        const inputStyle = isAltered ? 'color: var(--danger); font-weight: 700; background: rgba(220,38,38,0.05); border-color: rgba(220,38,38,0.3);' : '';
+        
+        html += `<td style="padding:6px; border-right:1px solid var(--border);">`;
+        html += `<input type="text" value="${escapeAttr(val)}" onchange="updateExam(${origIdx},'${f.id}',this.value)" class="exam-value-input" data-row="${rIndex}" data-col="${cIdx}" style="width:100%; padding:6px; font-size:13px; border:1px solid var(--border); border-radius:4px; text-align:center; ${inputStyle}">`;
+        html += `</td>`;
+      });
+      html += `<td></td></tr>`;
+      rIndex++;
     });
-    html += `<td></td></tr>`;
   });
 
   // Custom List
