@@ -878,6 +878,168 @@ async function renderBalancoDetail() {
     html += `</div><hr style="border:none;border-top:1px solid var(--border);margin:24px 0;">`;
   });
 
+  // ── CONSOLIDADO 24H ──────────────────────────────────────────────────────────
+  if (hasData) {
+    let total24Ganhos = 0;
+    let total24Diurese = 0;
+    let total24Drenos = 0;
+    let total24HD = 0;
+    let total24Evac = 0;
+    let total24GlichMin = 9999, total24GlichMax = 0, hasGlic24 = false;
+    let total24TempMin = 99, total24TempMax = 0, hasTemp24 = false;
+    let total24PASMin = 999, total24PASMax = 0, hasPAS24 = false;
+    let total24FCMin = 999, total24FCMax = 0, hasFC24 = false;
+    let fevEps24 = 0, hypoEps24 = 0;
+
+    ['diurno', 'noturno'].forEach(shift => {
+      const key = `${bedIdx}_${today}_${shift}`;
+      const data = balancoData[key];
+      if (!data) return;
+
+      // Ganhos
+      (data.ganhos || []).forEach(g => {
+        let vol = 0;
+        if (g.volumes && Object.keys(g.volumes).length > 0) {
+          vol = Object.values(g.volumes).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+        }
+        if (vol === 0) vol = parseFloat(g.volume) || 0;
+        total24Ganhos += vol;
+      });
+
+      // Diurese
+      (data.diurese || []).forEach(d => {
+        let vol = 0;
+        if (d.volumes && Object.keys(d.volumes).length > 0) {
+          vol = Object.values(d.volumes).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+        }
+        if (vol === 0) vol = parseFloat(d.volume) || 0;
+        total24Diurese += vol;
+      });
+
+      // Drenos
+      (data.drenos || []).forEach(d => {
+        let vol = 0;
+        if (d.volumes && Object.keys(d.volumes).length > 0) {
+          vol = Object.values(d.volumes).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+        }
+        if (vol === 0) vol = parseFloat(d.volume) || 0;
+        total24Drenos += vol;
+      });
+
+      // HD
+      total24HD += parseFloat(data.hd?.ufReal) || 0;
+
+      // Evacuações
+      (data.evacuacoes || []).forEach(e => {
+        total24Evac += parseFloat(e.volume) || 200;
+      });
+
+      // Glicemia
+      (data.glicemia || []).forEach(g => {
+        const v = parseFloat(g.valor);
+        if (!isNaN(v)) {
+          hasGlic24 = true;
+          if (v > total24GlichMax) total24GlichMax = v;
+          if (v < total24GlichMin) total24GlichMin = v;
+        }
+      });
+
+      // Temperatura
+      Object.values(data.sinaisVitais || {}).forEach(sv => {
+        const t = parseFloat((sv.tax || '').replace(',', '.'));
+        if (!isNaN(t)) {
+          hasTemp24 = true;
+          if (t > total24TempMax) total24TempMax = t;
+          if (t < total24TempMin) total24TempMin = t;
+          if (t >= 37.8) fevEps24++;
+          if (t < 36.0) hypoEps24++;
+        }
+        if (sv.pa) {
+          const p = parseInt(sv.pa.split('/')[0]);
+          if (!isNaN(p)) { hasPAS24 = true; if (p > total24PASMax) total24PASMax = p; if (p < total24PASMin) total24PASMin = p; }
+        }
+        const fc = parseInt(sv.fc);
+        if (!isNaN(fc)) { hasFC24 = true; if (fc > total24FCMax) total24FCMax = fc; if (fc < total24FCMin) total24FCMin = fc; }
+      });
+    });
+
+    const total24Perdas = total24Diurese + total24Drenos + total24HD + total24Evac;
+    const bh24 = total24Ganhos - total24Perdas;
+    const bh24Sign = bh24 >= 0 ? '+' : '';
+    const bh24Color = bh24 > 0 ? '#0d5b8f' : (bh24 < 0 ? '#dc2626' : 'var(--text-primary)');
+    const bh24Bg = bh24 > 200 ? 'rgba(13,91,143,0.08)' : (bh24 < -200 ? 'rgba(220,38,38,0.07)' : 'rgba(0,0,0,0.03)');
+
+    // Badges de resumo clínico 24h
+    const badges24 = [];
+    if (hasTemp24) {
+      if (fevEps24 === 0 && hypoEps24 === 0) {
+        badges24.push(`<span class="resumo-badge resumo-success">🌡️ Afebril nas 24h</span>`);
+      } else {
+        if (fevEps24 > 0) badges24.push(`<span class="resumo-badge resumo-danger">🌡️ ${fevEps24} episódio${fevEps24 > 1 ? 's' : ''} febril${fevEps24 > 1 ? 'is' : ''} em 24h</span>`);
+        if (hypoEps24 > 0) badges24.push(`<span class="resumo-badge resumo-warning">🌡️ ${hypoEps24} episódio${hypoEps24 > 1 ? 's' : ''} de hipotermia em 24h</span>`);
+      }
+    }
+    if (hasPAS24) badges24.push(`<span class="resumo-badge resumo-info">PA ${total24PASMin}–${total24PASMax} mmHg (Δ${total24PASMax - total24PASMin})</span>`);
+    if (hasFC24) badges24.push(`<span class="resumo-badge resumo-info">FC ${total24FCMin}–${total24FCMax} bpm (Δ${total24FCMax - total24FCMin})</span>`);
+    if (hasGlic24) badges24.push(`<span class="resumo-badge resumo-info">Glicemia ${total24GlichMin}–${total24GlichMax} mg/dL</span>`);
+
+    html += `
+    <div style="margin-top: 8px; border: 2px solid ${bh24Color}; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 16px rgba(0,0,0,0.07);">
+      <div style="background: ${bh24Color}; padding: 12px 20px; display: flex; align-items: center; gap: 10px;">
+        <span style="font-size: 20px;">📊</span>
+        <div>
+          <div style="color: white; font-weight: 700; font-size: 15px; letter-spacing: 0.02em;">CONSOLIDADO 24 HORAS</div>
+          <div style="color: rgba(255,255,255,0.8); font-size: 11px;">Diurno + Noturno · ${formatDateBR(new Date())}</div>
+        </div>
+      </div>
+      <div style="background: ${bh24Bg}; padding: 20px;">
+
+        <!-- Linha de totais -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; margin-bottom: 20px;">
+          <div style="background: rgba(13,91,143,0.07); border: 1px solid rgba(13,91,143,0.2); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;">Ganhos</div>
+            <div style="font-size: 20px; font-weight: 800; color: #0d5b8f;">${total24Ganhos > 0 ? total24Ganhos : '—'} <span style="font-size:11px; font-weight:400;">mL</span></div>
+          </div>
+          <div style="background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.18); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;">Diurese</div>
+            <div style="font-size: 20px; font-weight: 800; color: #dc2626;">${total24Diurese > 0 ? total24Diurese : '—'} <span style="font-size:11px; font-weight:400;">mL</span></div>
+          </div>
+          ${total24Drenos > 0 ? `
+          <div style="background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.18); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;">Drenos</div>
+            <div style="font-size: 20px; font-weight: 800; color: #dc2626;">${total24Drenos} <span style="font-size:11px; font-weight:400;">mL</span></div>
+          </div>` : ''}
+          ${total24HD > 0 ? `
+          <div style="background: rgba(220,38,38,0.06); border: 1px solid rgba(220,38,38,0.18); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;">HD (UF)</div>
+            <div style="font-size: 20px; font-weight: 800; color: #dc2626;">${total24HD} <span style="font-size:11px; font-weight:400;">mL</span></div>
+          </div>` : ''}
+          ${total24Evac > 0 ? `
+          <div style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;">Evacuações</div>
+            <div style="font-size: 20px; font-weight: 800; color: #d97706;">${total24Evac} <span style="font-size:11px; font-weight:400;">mL</span></div>
+          </div>` : ''}
+          <div style="background: ${bh24Bg}; border: 2px solid ${bh24Color}; border-radius: 8px; padding: 12px; text-align: center;">
+            <div style="font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 4px;">BH 24h</div>
+            <div style="font-size: 24px; font-weight: 900; color: ${bh24Color};">${bh24Sign}${bh24} <span style="font-size:12px; font-weight:500;">mL</span></div>
+          </div>
+        </div>
+
+        <!-- Detalhes de perdas -->
+        <div style="font-size: 12px; color: var(--text-secondary); margin-bottom: ${badges24.length > 0 ? '16px' : '0'};">
+          <strong>Total de perdas:</strong> ${total24Perdas} mL
+          ${total24Diurese > 0 ? `&nbsp;·&nbsp; Diurese: ${total24Diurese} mL` : ''}
+          ${total24Drenos > 0 ? `&nbsp;·&nbsp; Drenos: ${total24Drenos} mL` : ''}
+          ${total24HD > 0 ? `&nbsp;·&nbsp; HD/UF: ${total24HD} mL` : ''}
+          ${total24Evac > 0 ? `&nbsp;·&nbsp; Evacuações: ${total24Evac} mL` : ''}
+        </div>
+
+        <!-- Badges clínicos 24h -->
+        ${badges24.length > 0 ? `<div style="display:flex;flex-wrap:wrap;gap:8px;">${badges24.join('')}</div>` : ''}
+      </div>
+    </div>`;
+  }
+
   if (!hasData) {
     html = `<p style="color:var(--text-muted);font-style:italic;">Nenhum dado de balanço registrado para hoje.</p>`;
   }
@@ -2230,37 +2392,142 @@ function renderExamCharts(bed) {
 
   destroyCharts();
 
+  // Each group can define yAxisID per field.
+  // 'y'  = left axis  (lower-magnitude values)
+  // 'y1' = right axis (higher-magnitude values)
   const chartGroups = [
-    { id: 'chart-hemograma', title: 'Hemograma', fields: ['hb', 'ht', 'leuco', 'plaq'] },
-    { id: 'chart-renal', title: 'Função Renal / Inflamação', fields: ['ur', 'cr', 'pcr', 'lactato'] },
-    { id: 'chart-ions', title: 'Eletrólitos / Hepático', fields: ['na', 'k', 'tgo', 'tgp'] },
+    {
+      id: 'chart-hemograma',
+      title: 'Hemograma',
+      fields: [
+        { id: 'hb',    yAxis: 'y'  },  // g/dL  ~7–18
+        { id: 'ht',    yAxis: 'y'  },  // %      ~20–55
+        { id: 'leuco', yAxis: 'y1' },  // /mm³   ~1000–30000
+        { id: 'plaq',  yAxis: 'y1' },  // mil    ~50–600
+      ],
+      leftLabel:  'Hb (g/dL) / Ht (%)',
+      rightLabel: 'Global (/mm³) / Plaq (mil)',
+    },
+    {
+      id: 'chart-renal',
+      title: 'Função Renal / Inflamação',
+      fields: [
+        { id: 'cr',      yAxis: 'y'  },  // mg/dL   ~0.5–15
+        { id: 'lactato', yAxis: 'y'  },  // mmol/L  ~0.5–10
+        { id: 'ur',      yAxis: 'y1' },  // mg/dL   ~10–300
+        { id: 'pcr',     yAxis: 'y1' },  // mg/L    ~0–300
+      ],
+      leftLabel:  'Cr (mg/dL) / Lactato (mmol/L)',
+      rightLabel: 'Ur (mg/dL) / PCR (mg/L)',
+    },
+    {
+      id: 'chart-ions',
+      title: 'Eletrólitos',
+      fields: [
+        { id: 'k',  yAxis: 'y'  },  // mEq/L ~2.5–7
+        { id: 'mg', yAxis: 'y'  },  // mEq/L ~0.5–4
+        { id: 'na', yAxis: 'y1' },  // mEq/L ~115–160
+        { id: 'cl', yAxis: 'y1' },  // mEq/L ~85–120
+      ],
+      leftLabel:  'K / Mg (mEq/L)',
+      rightLabel: 'Na / Cl (mEq/L)',
+    },
+    {
+      id: 'chart-hepatico',
+      title: 'Hepático / Coagulação',
+      fields: [
+        { id: 'alb', yAxis: 'y'  },  // g/dL   ~1–5
+        { id: 'inr', yAxis: 'y'  },  // ratio  ~0.8–6
+        { id: 'tgo', yAxis: 'y1' },  // U/L    ~10–5000
+        { id: 'tgp', yAxis: 'y1' },  // U/L    ~10–5000
+      ],
+      leftLabel:  'Alb (g/dL) / INR',
+      rightLabel: 'TGO / TGP (U/L)',
+    },
   ];
 
+  // Color palette: left-axis colours first, right-axis colours after
   const colors = ['#0d5b8f', '#16a34a', '#d97706', '#dc2626', '#7c3aed', '#0891b2'];
   const sorted = [...bed.exams].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
   const labels = sorted.map(e => e.date ? formatDateBR(new Date(e.date + 'T12:00:00')) : '?');
 
-  chartGroups.forEach(group => {
+  // Make sure we have canvas elements for the new chart-hepatico
+  const examsTab = document.getElementById('tab-exames');
+  if (examsTab && !document.getElementById('chart-hepatico')) {
+    const chartsSection = examsTab.querySelector('.section-card:last-of-type');
+    if (chartsSection) {
+      const wrap = document.createElement('div');
+      wrap.className = 'chart-container';
+      const canvas = document.createElement('canvas');
+      canvas.id = 'chart-hepatico';
+      wrap.appendChild(canvas);
+      chartsSection.appendChild(wrap);
+    }
+  }
+
+  chartGroups.forEach((group, gi) => {
     const canvas = document.getElementById(group.id);
     if (!canvas) return;
 
-    const datasets = group.fields.map((fid, ci) => {
-      const field = EXAM_FIELDS.find(f => f.id === fid);
+    const hasRightAxis = group.fields.some(f => f.yAxis === 'y1');
+
+    const datasets = group.fields.map((fd, ci) => {
+      const field = EXAM_FIELDS.find(f => f.id === fd.id);
       const data = sorted.map(e => {
-        const v = parseFloat(e[fid]);
+        const v = parseFloat(e[fd.id]);
         return isNaN(v) ? null : v;
       });
+
+      // Left axis: solid lines; right axis: dashed lines — easy visual cue
+      const isDashed = fd.yAxis === 'y1';
       return {
-        label: field ? `${field.name} (${field.unit})` : fid,
+        label: field ? `${field.name}${field.unit ? ' (' + field.unit + ')' : ''}` : fd.id,
         data,
+        yAxisID: fd.yAxis || 'y',
         borderColor: colors[ci % colors.length],
-        backgroundColor: colors[ci % colors.length] + '15',
+        backgroundColor: colors[ci % colors.length] + '18',
+        borderDash: isDashed ? [5, 3] : [],
         tension: 0.3,
         pointRadius: 4,
         pointHoverRadius: 6,
         spanGaps: true,
+        fill: false,
       };
     });
+
+    const scales = {
+      x: {
+        ticks: { color: '#9ca3af', font: { size: 10 } },
+        grid: { color: '#e5e7eb' },
+      },
+      y: {
+        type: 'linear',
+        position: 'left',
+        ticks: { color: '#9ca3af', font: { size: 10 } },
+        grid: { color: '#e5e7eb' },
+        title: {
+          display: !!group.leftLabel,
+          text: group.leftLabel || '',
+          color: '#6b7280',
+          font: { size: 10 },
+        },
+      },
+    };
+
+    if (hasRightAxis) {
+      scales.y1 = {
+        type: 'linear',
+        position: 'right',
+        ticks: { color: '#9ca3af', font: { size: 10 } },
+        grid: { drawOnChartArea: false },  // don't draw grid lines for right axis
+        title: {
+          display: !!group.rightLabel,
+          text: group.rightLabel || '',
+          color: '#6b7280',
+          font: { size: 10 },
+        },
+      };
+    }
 
     state.charts[group.id] = new Chart(canvas, {
       type: 'line',
@@ -2268,14 +2535,20 @@ function renderExamCharts(bed) {
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
         plugins: {
-          legend: { position: 'top', labels: { color: '#6c757d', font: { size: 11 } } },
+          legend: { position: 'top', labels: { color: '#6c757d', font: { size: 11 }, boxWidth: 14, usePointStyle: true } },
           title: { display: true, text: group.title, color: '#1a2332', font: { size: 14, weight: 700 } },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const v = ctx.parsed.y;
+                return v !== null ? `${ctx.dataset.label}: ${v}` : '';
+              }
+            }
+          }
         },
-        scales: {
-          x: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: '#e5e7eb' } },
-          y: { ticks: { color: '#9ca3af', font: { size: 10 } }, grid: { color: '#e5e7eb' } },
-        },
+        scales,
       },
     });
   });
