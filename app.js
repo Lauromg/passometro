@@ -1543,9 +1543,23 @@ async function inserirBalancoNaEvolucao() {
   let alimentacao = [];
   
   let hasData = false;
+  let targetDateISO = searchDateISO;
+  
+  const checkHasData = (dISO) => shifts.some(shift => !!balancoData[`${bedIdx}_${dISO}_${shift}`]);
+  if (!checkHasData(targetDateISO)) {
+    for (let i = 1; i <= 5; i++) {
+      let d = new Date(searchDateISO + 'T12:00:00');
+      d.setDate(d.getDate() - i);
+      const prevDateISO = formatDateISO(d);
+      if (checkHasData(prevDateISO)) {
+        targetDateISO = prevDateISO;
+        break;
+      }
+    }
+  }
 
   shifts.forEach(shift => {
-    const key = `${bedIdx}_${searchDateISO}_${shift}`;
+    const key = `${bedIdx}_${targetDateISO}_${shift}`;
     const data = balancoData[key];
     if (!data) return;
     
@@ -1575,7 +1589,7 @@ async function inserirBalancoNaEvolucao() {
   });
 
   if (!hasData) {
-    alert(`Nenhum dado de balanço (24h) encontrado na data ${searchDateISO}.`);
+    alert(`Nenhum dado de balanço (24h) encontrado na data ${searchDateISO} ou em dias anteriores.`);
     return;
   }
   
@@ -1649,8 +1663,22 @@ async function inserirInfusoesNaEvolucao() {
   const shifts = ['diurno', 'noturno'];
   const allGanhos = {};
 
+  let targetDateISO = searchDateISO;
+  const checkHasData = (dISO) => shifts.some(shift => !!balancoData[`${bedIdx}_${dISO}_${shift}`]);
+  if (!checkHasData(targetDateISO)) {
+    for (let i = 1; i <= 5; i++) {
+      let d = new Date(searchDateISO + 'T12:00:00');
+      d.setDate(d.getDate() - i);
+      const prevDateISO = formatDateISO(d);
+      if (checkHasData(prevDateISO)) {
+        targetDateISO = prevDateISO;
+        break;
+      }
+    }
+  }
+
   shifts.forEach(shift => {
-    const key = `${bedIdx}_${searchDateISO}_${shift}`;
+    const key = `${bedIdx}_${targetDateISO}_${shift}`;
     const data = balancoData[key];
     if (data && data.ganhos) {
       data.ganhos.forEach(g => {
@@ -1738,7 +1766,7 @@ async function inserirInfusoesNaEvolucao() {
   });
 
   if (infusoesText.length === 0) {
-    alert(`Nenhuma infusão encontrada para a data ${searchDateISO}.`);
+    alert(`Nenhuma infusão encontrada para a data ${searchDateISO} ou em dias anteriores.`);
     return;
   }
 
