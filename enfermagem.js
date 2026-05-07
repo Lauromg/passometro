@@ -980,3 +980,136 @@ window.startApp = async function () {
     console.log('[ENF] Rendering dashboard with', state.beds.filter(b => b.firstName).length, 'occupied beds');
     renderDashboard();
 };
+
+// ===== MIGRATE BALANCO =====
+function openMigrateModal() {
+  if (state.currentBed === null) {
+    alert('Selecione um leito primeiro.');
+    return;
+  }
+
+  const bed = state.beds[state.currentBed] || { number: state.currentBed + 1, firstName: '', initial: '' };
+  const bedName = bed.firstName ? `${bed.firstName} ${bed.initial}` : `Leito ${bed.number}`;
+  document.getElementById('migrate-origin-label').textContent = `Leito ${bed.number} — ${bedName}`;
+
+  // Populate destination select
+  const select = document.getElementById('migrate-dest-select');
+  let html = '<option value="">Selecione o leito de destino...</option>';
+  for (let idx = 0; idx < TOTAL_BEDS; idx++) {
+    if (idx === state.currentBed) continue;
+    const b = state.beds[idx] || { number: idx + 1, firstName: '', initial: '' };
+    const occupied = b.firstName && b.firstName.trim() !== '';
+    const label = occupied ? `${b.firstName} ${b.initial}` : 'Vago';
+    html += `<option value="${idx}">Leito ${b.number} — ${label}</option>`;
+  }
+  select.innerHTML = html;
+
+  // Reset options
+  const currentRadio = document.querySelector('input[name="migrate-scope"][value="current"]');
+  if (currentRadio) currentRadio.checked = true;
+  document.getElementById('migrate-delete-origin').checked = false;
+
+  document.getElementById('migrate-modal').style.display = 'flex';
+}
+
+function closeMigrateModal() {
+  document.getElementById('migrate-modal').style.display = 'none';
+}
+
+async function confirmMigrateBalanco() {
+  const destIdx = parseInt(document.getElementById('migrate-dest-select').value);
+  if (isNaN(destIdx)) {
+    alert('Selecione um leito de destino.');
+    return;
+  }
+
+  const scopeEl = document.querySelector('input[name="migrate-scope"]:checked');
+  const scope = scopeEl ? scopeEl.value : 'current';
+  const deleteOrigin = document.getElementById('migrate-delete-origin').checked;
+  const srcIdx = state.currentBed;
+  const today = todayISO();
+
+  // Build list of {date, shift} entries based on scope
+  const entries = [];
+  if (scope === 'current') {
+    entries.push({ date: state.currentDate, shift: state.currentShift });
+  } else if (scope === 'today') {
+    entries.push({ date: today, shift: 'diurno' });
+    entries.push({ date: today, shift: 'noturno' });
+  } else {
+    for (let d = 0; d < 3; d++) {
+      const dt = new Date(today + 'T12:00:00');
+      dt.setDate(dt.getDate() - d);
+      const dateStr = formatDateISO(dt);
+      entries.push({ date: dateStr, shift: 'diurno' });
+      entries.push({ date: dateStr, shift: 'noturno' });
+    }
+  }
+
+  // Filter to entries that actually have data
+  const toMigrate = entries.filter(({ date, shift }) =>
+    !!state.balanco[getShiftKey(srcIdx, date, shift)]
+  );
+
+  if (toMigrate.length === 0) {
+    alert('Nenhum dado de balanço encontrado para os turnos selecionados.');
+    closeMigrateModal();
+    return;
+  }
+
+  // Build Firestore update payload
+  const { doc, updateDoc, setDoc, deleteField } = window.firebaseFirestore;
+  const updatePayload = {};
+
+  toMigrate.forEach(({ date, shift }) => {
+    const srcKey = getShiftKey(srcIdx, date, shift);
+    const destKey = getShiftKey(destIdx, date, shift);
+    const srcData = JSON.parse(JSON.stringify(state.balanco[srcKey]));
+
+    updatePayload[`data.${destKey}`] = srcData;
+    state.balanco[destKey] = srcData;
+
+    if (deleteOrigin) {
+      updatePayload[`data.${srcKey}`] = deleteField();
+      delete state.balanco[srcKey];
+    }
+  });
+
+  try {
+    showSaveIndicator('saving', '⟳ Migrando...');
+
+    if (window.firebaseDb && window.firebaseFirestore) {
+      const db = window.firebaseDb;
+      const ref = doc(db, 'passometro/balanco');
+      try {
+        await updateDoc(ref, updatePayload);
+      } catch (e) {
+        if (e.code === 'not-found') {
+          // Document doesn't exist yet — create with migrated data only
+          const setPayload = { data: {} };
+          toMigrate.forEach(({ date, shift }) => {
+            const destKey = getShiftKey(destIdx, date, shift);
+            if (state.balanco[destKey]) setPayload.data[destKey] = state.balanco[destKey];
+          });
+          await setDoc(ref, setPayload);
+        } else throw e;
+      }
+    }
+
+    saveLocal();
+    showSaveIndicator('saved', `✓ ${toMigrate.length} turno(s) migrado(s)`);
+    closeMigrateModal();
+
+    const destBed = state.beds[destIdx] || { number: destIdx + 1 };
+    alert(
+      `✓ ${toMigrate.length} turno(s) migrado(s) para Leito ${destBed.number} com sucesso!` +
+      (deleteOrigin ? '\nDados do leito de origem removidos.' : '')
+    );
+
+  } catch (e) {
+    console.error('[ENF] Migrate error:', e);
+    showSaveIndicator('error', '✗ Erro ao migrar');
+    alert('Erro ao migrar dados. Tente novamente.');
+  }
+}
+

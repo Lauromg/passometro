@@ -155,7 +155,8 @@ Solicitar avaliação da nefro
 Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', this.value)"></textarea>
                     </div>
                 </div>
-                <div class="clear-patient-area">
+                <div class="clear-patient-area" style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+                    <button class="btn" id="btn-transfer-bed" onclick="openTransferModal()" style="border:1px solid var(--warning,#d97706); color:var(--warning,#d97706); background:transparent;">🔄 Transferir para Outro Leito</button>
                     <button class="btn btn-danger" onclick="clearPatient()">🗑️ Limpar Leito (Alta / Óbito)</button>
                 </div>
             </div>
@@ -767,6 +768,34 @@ Rx de tórax de controle amanhã..." oninput="updatePatientField('pendencias', t
             
             <div style="display:flex; justify-content: flex-end; align-items:center; margin-top: 16px;">
                 <button class="btn-ghost" onclick="loadSepseAdminData()">🔄 Atualizar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TRANSFER BED MODAL -->
+    <div id="transfer-bed-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; justify-content:center; align-items:center;">
+        <div style="background:var(--bg-card); padding:24px; border-radius:12px; width:90%; max-width:480px; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <h3 style="margin:0; font-size:18px;">🔄 Transferir Paciente de Leito</h3>
+                <button onclick="closeTransferModal()" style="background:none; border:none; font-size:20px; cursor:pointer;">✕</button>
+            </div>
+            <div style="margin-bottom:14px; padding:12px; background:rgba(13,91,143,0.06); border-radius:8px; border:1px solid rgba(13,91,143,0.15);">
+                <p style="font-size:12px; color:var(--text-muted); margin:0 0 2px;">Paciente / Leito de origem</p>
+                <p id="transfer-origin-label" style="font-weight:700; font-size:16px; color:var(--text-primary); margin:0;"></p>
+            </div>
+            <div style="margin-bottom:14px;">
+                <label style="display:block; font-size:13px; color:var(--text-secondary); margin-bottom:6px; font-weight:600;">Leito de destino:</label>
+                <select id="transfer-dest-select" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:6px; font-size:14px; background:var(--bg-card); color:var(--text-primary);" onchange="onTransferDestChange()">
+                    <option value="">Selecione o leito de destino...</option>
+                </select>
+            </div>
+            <div id="transfer-occupied-warning" style="display:none; background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.3); border-radius:8px; padding:12px; margin-bottom:14px; font-size:13px; color:var(--danger);"></div>
+            <div id="transfer-balanco-info" style="display:none; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px; margin-bottom:14px; font-size:13px; color:#92400e;">
+                ⚠️ Os dados de <strong>Balanço Hídrico</strong> da enfermagem precisam ser migrados separadamente na página de Enfermagem, usando o botão "Migrar Balanço".
+            </div>
+            <div style="display:flex; gap:8px; justify-content:flex-end;">
+                <button class="btn" onclick="closeTransferModal()" style="border:1px solid var(--border);">Cancelar</button>
+                <button class="btn btn-primary" id="btn-confirm-transfer" onclick="confirmTransferBed()" disabled>✓ Confirmar Transferência</button>
             </div>
         </div>
     </div>

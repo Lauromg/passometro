@@ -1,6 +1,9 @@
 // ===== PASSÔMETRO UTI - APP.JS =====
 // State management, rendering, persistence
 
+// Arredonda para até 2 casas decimais, eliminando erros de ponto flutuante
+function round2(v) { return parseFloat(parseFloat(v).toFixed(2)); }
+
 const TOTAL_BEDS = 10;
 
 const DEVICES_LIST = [
@@ -361,15 +364,15 @@ function getBalancoSummaryForBed(bedIdx) {
 
   if (hasPAS) parts.push(`PA ${minPAS}–${maxPAS} mmHg (Δ${maxPAS - minPAS})`);
   if (hasFC) parts.push(`FC ${minFC}–${maxFC} bpm (Δ${maxFC - minFC})`);
-  if (hasGlic) parts.push(`Glicemia ${minGlic}–${maxGlic} mg/dL (Δ${maxGlic - minGlic})`);
+  if (hasGlic) parts.push(`Glicemia ${minGlic}–${maxGlic} mg/dL (Δ${round2(maxGlic - minGlic)})`);
 
-  const perdas = diurese + drenos + hd + evac;
-  const bh = ganhos - perdas;
+  const perdas = round2(diurese + drenos + hd + evac);
+  const bh = round2(ganhos - perdas);
   
   if (ganhos > 0 || perdas > 0) {
     const sign = bh >= 0 ? '+' : '';
     parts.push(`BH 24h: ${sign}${bh}mL`);
-    if (diurese > 0) parts.push(`Diurese ${diurese}mL`);
+    if (diurese > 0) parts.push(`Diurese ${round2(diurese)}mL`);
   }
 
   return parts.length > 0 ? parts.join(' • ') : '';
@@ -768,7 +771,8 @@ async function renderBalancoDetail() {
          });
          // Fallback
          if (rowTotal === 0 && parseFloat(g.volume) > 0) rowTotal = parseFloat(g.volume);
-         html += `<td style="text-align: center; font-weight: 700; color: var(--accent); background: rgba(0,0,0,0.02);">${rowTotal > 0 ? rowTotal : '-'}</td></tr>`;
+         const rowTotalDisplay = round2(rowTotal);
+         html += `<td style="text-align: center; font-weight: 700; color: var(--accent); background: rgba(0,0,0,0.02);">${rowTotalDisplay > 0 ? rowTotalDisplay : '-'}</td></tr>`;
       });
     }
 
@@ -812,7 +816,7 @@ async function renderBalancoDetail() {
        (data.diurese || []).forEach(d => { if (d.volumes && d.volumes[h]) diuH += parseFloat(d.volumes[h]) || 0; });
        (data.drenos || []).forEach(d => { if (d.volumes && d.volumes[h]) dreH += parseFloat(d.volumes[h]) || 0; });
        
-       let bhH = gH - diuH - dreH;
+       let bhH = round2(gH - diuH - dreH);
        let bhColor = bhH > 0 ? 'color: var(--accent);' : (bhH < 0 ? 'color: var(--danger);' : 'color: var(--text-muted);');
        html += `<td style="text-align: center; font-weight: 700; ${bhColor}">${bhH !== 0 ? (bhH > 0 ? '+' : '') + bhH : '-'}</td>`;
        
@@ -827,7 +831,7 @@ async function renderBalancoDetail() {
       totalPerdasCalc = totalDiurese + totalDrenos + evac + hd;
     }
 
-    const bhTotal = totalGanhosCalc - totalPerdasCalc;
+    const bhTotal = round2(totalGanhosCalc - totalPerdasCalc);
     const signTotal = bhTotal >= 0 ? '+' : '';
     const bhTotalColor = bhTotal > 0 ? 'color: var(--accent);' : (bhTotal < 0 ? 'color: var(--danger);' : 'color: var(--text-primary);');
     
@@ -963,8 +967,8 @@ async function renderBalancoDetail() {
       });
     });
 
-    const total24Perdas = total24Diurese + total24Drenos + total24HD + total24Evac;
-    const bh24 = total24Ganhos - total24Perdas;
+    const total24Perdas = round2(total24Diurese + total24Drenos + total24HD + total24Evac);
+    const bh24 = round2(total24Ganhos - total24Perdas);
     const bh24Sign = bh24 >= 0 ? '+' : '';
     const bh24Color = bh24 > 0 ? '#0d5b8f' : (bh24 < 0 ? '#dc2626' : 'var(--text-primary)');
     const bh24Bg = bh24 > 200 ? 'rgba(13,91,143,0.08)' : (bh24 < -200 ? 'rgba(220,38,38,0.07)' : 'rgba(0,0,0,0.03)');
@@ -1389,11 +1393,11 @@ async function inserirBalancoNaEvolucao() {
   
   if (vitalsText.length) textoEvo.push('- Sinais Vitais: ' + vitalsText.join(' | '));
   
-  if (hasGlic) textoEvo.push(`- ΔGlicemia: ${minGlic}-${maxGlic} mg/dL (Δ${maxGlic-minGlic})`);
+  if (hasGlic) textoEvo.push(`- ΔGlicemia: ${minGlic}-${maxGlic} mg/dL (Δ${round2(maxGlic-minGlic)})`);
   
   // Balanço
-  const perdas = diurese + drenos + hd + evac;
-  const bh = ganhos - perdas;
+  const perdas = round2(diurese + drenos + hd + evac);
+  const bh = round2(ganhos - perdas);
   const sign = bh >= 0 ? '+' : '';
   
   textoEvo.push(`- Balanço Hídrico (24h): ${sign}${bh} mL`);
@@ -2571,6 +2575,115 @@ function clearPatient() {
   state.beds[state.currentBed] = createEmptyBed(num);
   renderPatientView();
   triggerSave();
+}
+
+// ===== TRANSFER BED =====
+function openTransferModal() {
+  const bed = state.beds[state.currentBed];
+  if (!bed || !bed.name || !bed.name.trim()) {
+    alert('Este leito está vago. Não há paciente para transferir.');
+    return;
+  }
+
+  // Populate origin label
+  document.getElementById('transfer-origin-label').textContent =
+    `Leito ${bed.number} — ${bed.name}`;
+
+  // Hide warnings, disable confirm
+  document.getElementById('transfer-occupied-warning').style.display = 'none';
+  document.getElementById('transfer-balanco-info').style.display = 'none';
+  document.getElementById('btn-confirm-transfer').disabled = true;
+
+  // Populate destination select
+  const select = document.getElementById('transfer-dest-select');
+  let html = '<option value="">Selecione o leito de destino...</option>';
+  let hasVacant = false;
+  state.beds.forEach((b, idx) => {
+    if (idx === state.currentBed) return;
+    const occupied = b.name && b.name.trim() !== '';
+    if (occupied) {
+      html += `<option value="${idx}" disabled>🔒 Leito ${b.number} — ${escapeHTML(b.name)} (ocupado)</option>`;
+    } else {
+      html += `<option value="${idx}">🛏️ Leito ${b.number} — Vago</option>`;
+      hasVacant = true;
+    }
+  });
+  select.innerHTML = html;
+
+  if (!hasVacant) {
+    document.getElementById('transfer-occupied-warning').textContent =
+      'Todos os outros leitos estão ocupados. Realize a alta ou transferência do leito de destino antes de continuar.';
+    document.getElementById('transfer-occupied-warning').style.display = 'block';
+  }
+
+  document.getElementById('transfer-bed-modal').style.display = 'flex';
+}
+
+function onTransferDestChange() {
+  const select = document.getElementById('transfer-dest-select');
+  const warning = document.getElementById('transfer-occupied-warning');
+  const info = document.getElementById('transfer-balanco-info');
+  const btn = document.getElementById('btn-confirm-transfer');
+
+  const val = select.value;
+  if (!val) {
+    warning.style.display = 'none';
+    info.style.display = 'none';
+    btn.disabled = true;
+    return;
+  }
+
+  const destIdx = parseInt(val);
+  const destBed = state.beds[destIdx];
+  if (destBed && destBed.name && destBed.name.trim()) {
+    warning.textContent = `⚠️ Leito ${destBed.number} está ocupado. Transfira ou dê alta ao paciente antes de continuar.`;
+    warning.style.display = 'block';
+    info.style.display = 'none';
+    btn.disabled = true;
+  } else {
+    warning.style.display = 'none';
+    info.style.display = 'block';
+    btn.disabled = false;
+  }
+}
+
+function closeTransferModal() {
+  document.getElementById('transfer-bed-modal').style.display = 'none';
+}
+
+function confirmTransferBed() {
+  const select = document.getElementById('transfer-dest-select');
+  const destIdx = parseInt(select.value);
+  if (isNaN(destIdx)) return;
+
+  const srcIdx = state.currentBed;
+  const srcBed = state.beds[srcIdx];
+  const destBed = state.beds[destIdx];
+
+  if (!srcBed || !srcBed.name || !srcBed.name.trim()) return;
+  if (destBed && destBed.name && destBed.name.trim()) {
+    alert('Leito de destino está ocupado. Escolha um leito vago.');
+    return;
+  }
+
+  const destNumber = state.beds[destIdx].number;
+  const srcNumber = srcBed.number;
+
+  // Copy patient data to destination, updating bed number
+  const patientCopy = JSON.parse(JSON.stringify(srcBed));
+  patientCopy.number = destNumber;
+  state.beds[destIdx] = patientCopy;
+
+  // Clear origin
+  state.beds[srcIdx] = createEmptyBed(srcNumber);
+
+  closeTransferModal();
+
+  // Navigate to the new bed
+  state.currentBed = destIdx;
+  triggerSave();
+  renderPatientView();
+  showSaveIndicator('saved', `✓ Paciente movido para Leito ${destNumber}`);
 }
 
 // ===== HELPERS =====
