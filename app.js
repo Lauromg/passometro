@@ -1708,8 +1708,21 @@ async function inserirInfusoesNaEvolucao() {
     const max = Math.max(...nonZeroValues);
 
     let status = '';
-    if (nonZeroValues.length <= 2 && values.length > 2) {
-      // Muito poucos valores não-zero comparado ao total -> intermitente
+    const isContinuousTerm = desc.toLowerCase().match(/(nora|adrenal|dobuta|dopa|nitro|tridil|nipride|fentanil|midazolam|propofol|ketamina|vaso|amiodarona|precedex|dexmede|soro|ringer|npt|dieta|seda|insulina|heparina|nimbium|cisatrac|rocuronio)/);
+
+    if (!isContinuousTerm && nonZeroValues.length <= 6) {
+      const numDoses = nonZeroValues.length;
+      let doseText = `${numDoses} doses`;
+      if (numDoses === 1) doseText = 'uma dose';
+      else if (numDoses === 2) doseText = 'duas doses';
+      else if (numDoses === 3) doseText = 'três doses';
+      else if (numDoses === 4) doseText = 'quatro doses';
+      else if (numDoses === 5) doseText = 'cinco doses';
+      else if (numDoses === 6) doseText = 'seis doses';
+      
+      status = `${doseText} (total ${info.totalVolume} ml)`;
+    } else if (nonZeroValues.length <= 2 && values.length > 2) {
+      // Muito poucos valores não-zero comparado ao total de células preenchidas (com zeros)
       status = `intermitente (total ${info.totalVolume} ml)`;
     } else if (max === min) {
       status = `dose estável (${max} ml/h)`;
