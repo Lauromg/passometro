@@ -269,7 +269,7 @@ async function loadPatientNames() {
                     const parts = bed.name.trim().split(/\s+/);
                     const firstName = parts[0];
                     const lastInitial = parts.length > 1 ? parts[parts.length - 1][0] + '.' : '';
-                    state.beds[idx] = { number: bed.number || idx + 1, firstName, initial: lastInitial, fullName: bed.name.trim() };
+                    state.beds[idx] = { number: bed.number || idx + 1, firstName, initial: lastInitial, fullName: bed.name.trim(), peso: bed.peso || '' };
                 } else if (idx < TOTAL_BEDS) {
                     state.beds[idx] = { number: bed.number || idx + 1, firstName: '', initial: '', fullName: '' };
                 }
@@ -389,6 +389,7 @@ function switchTab(tabId, btn) {
     if (btn) btn.classList.add('active');
 
     if (tabId === 'resumo') updateResumo();
+    if (tabId === 'consolidado') renderConsolidadoTab();
 }
 
 // ===== RENDER ALL TABS =====
@@ -399,6 +400,7 @@ function renderAllTabs() {
     renderAlimentacao();
     renderPerdas();
     updateResumo();
+    renderConsolidadoTab();
 }
 
 // ===== SINAIS VITAIS =====
@@ -726,6 +728,8 @@ function updateResumo() {
     // Clinical summary badges
     const badges = generateClinicalSummary(data, bh);
     document.getElementById('resumo-badges').innerHTML = badges;
+
+    renderPesoNutri();
 }
 
 function generateClinicalSummary(data, bh) {
@@ -819,6 +823,258 @@ function getBalancoSummaryText(bedIdx, date) {
         }
     });
     return parts.join(' • ');
+}
+
+// ===== PESO PACIENTE (Nutricionista) =====
+function renderPesoNutri() {
+    const el = document.getElementById('peso-paciente');
+    if (!el) return;
+    const peso = (state.currentBed !== null && state.beds[state.currentBed]) ? (state.beds[state.currentBed].peso || '') : '';
+    el.value = peso;
+    const statusEl = document.getElementById('peso-save-status');
+    if (statusEl && !statusEl.textContent) statusEl.textContent = '';
+}
+
+let pesoSaveTimeout = null;
+function savePesoNutri(valor) {
+    if (state.currentBed === null) return;
+    if (state.beds[state.currentBed]) {
+        state.beds[state.currentBed].peso = valor;
+    }
+    const statusEl = document.getElementById('peso-save-status');
+    if (statusEl) { statusEl.textContent = '⟳ Salvando...'; statusEl.style.color = 'var(--accent)'; }
+    clearTimeout(pesoSaveTimeout);
+    pesoSaveTimeout = setTimeout(() => savePesoToFirebase(valor), 1500);
+}
+
+async function savePesoToFirebase(peso) {
+    if (!window.firebaseDb || !window.firebaseFirestore || !window.firebaseAuth?.currentUser) return;
+    if (state.currentBed === null) return;
+    try {
+        const { doc, getDoc, updateDoc } = window.firebaseFirestore;
+        const db = window.firebaseDb;
+        const ref = doc(db, 'passometro/leitos');
+        const snap = await getDoc(ref);
+        if (snap.exists() && snap.data().beds) {
+            const beds = snap.data().beds;
+            if (beds[state.currentBed] !== undefined) {
+                beds[state.currentBed].peso = peso;
+                await updateDoc(ref, { beds, lastUpdate: new Date().toISOString() });
+                const statusEl = document.getElementById('peso-save-status');
+                if (statusEl) {
+                    const time = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    statusEl.textContent = `✓ Salvo às ${time}`;
+                    statusEl.style.color = 'var(--success)';
+                }
+            }
+        }
+    } catch (e) {
+        console.error('[ENF] Erro ao salvar peso:', e);
+        const statusEl = document.getElementById('peso-save-status');
+        if (statusEl) { statusEl.textContent = '✗ Erro ao salvar'; statusEl.style.color = 'var(--danger)'; }
+    }
+}
+
+// ===== ÚLTIMOS BALANÇOS CONSOLIDADOS =====
+function getLastTwoCompletedShiftInfos() {
+    const bedIdx = state.currentBed;
+    const currentDate = state.currentDate;
+    const currentShift = state.currentShift;
+
+    const d = new Date(currentDate + 'T12:00:00');
+    const yesterday = new Date(d);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const yesterdayISO = formatDateISO(yesterday);
+
+    if (currentShift === 'diurno') {
+        return [
+            {
+                key: getShiftKey(bedIdx, yesterdayISO, 'noturno'),
+                label: `🌙 Noturno — ${formatDateBR(yesterday)} (19h) → ${formatDateBR(d)} (07h)`,
+                hours: SHIFT_HOURS.noturno,
+            },
+            {
+                key: getShiftKey(bedIdx, yesterdayISO, 'diurno'),
+                label: `☀️ Diurno — ${formatDateBR(yesterday)} (07h–19h)`,
+                hours: SHIFT_HOURS.diurno,
+            },
+        ];
+    } else {
+        return [
+            {
+                key: getShiftKey(bedIdx, currentDate, 'diurno'),
+                label: `☀️ Diurno — ${formatDateBR(d)} (07h–19h)`,
+                hours: SHIFT_HOURS.diurno,
+            },
+            {
+                key: getShiftKey(bedIdx, yesterdayISO, 'noturno'),
+                label: `🌙 Noturno — ${formatDateBR(yesterday)} (19h) → ${formatDateBR(d)} (07h)`,
+                hours: SHIFT_HOURS.noturno,
+            },
+        ];
+    }
+}
+
+function renderShiftReadOnly(data, shiftHours) {
+    if (!data) return `<p style="color:var(--text-muted);font-style:italic;padding:8px 0;">Sem dados registrados para este turno.</p>`;
+
+    const hasAnyData =
+        Object.keys(data.sinaisVitais || {}).length > 0 ||
+        (data.ganhos || []).length > 0 ||
+        (data.diurese || []).length > 0 ||
+        (data.drenos || []).length > 0 ||
+        (data.glicemia || []).length > 0 ||
+        (data.alimentacao || []).length > 0 ||
+        parseFloat(data.hd?.ufReal) > 0;
+
+    if (!hasAnyData) return `<p style="color:var(--text-muted);font-style:italic;padding:8px 0;">Sem dados registrados para este turno.</p>`;
+
+    let html = '';
+
+    // Sinais Vitais
+    const hasSV = shiftHours.some(h => {
+        const sv = (data.sinaisVitais || {})[h] || {};
+        return sv.pa || sv.fc || sv.fr || sv.spo2 || sv.tax;
+    });
+    if (hasSV) {
+        html += `<h5 style="margin:0 0 6px;font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">🫀 Sinais Vitais</h5>
+        <div style="overflow-x:auto;margin-bottom:16px;">
+        <table class="sv-table" style="font-size:11px;">
+        <thead><tr><th>Hora</th><th>PA</th><th>FC</th><th>FR</th><th>SpO₂</th><th>Tax</th><th>Obs</th></tr></thead><tbody>`;
+        shiftHours.forEach(h => {
+            const sv = (data.sinaisVitais || {})[h] || {};
+            if (sv.pa || sv.fc || sv.fr || sv.spo2 || sv.tax) {
+                html += `<tr><td>${h}:00</td><td>${escapeHTML(sv.pa || '—')}</td><td>${sv.fc || '—'}</td><td>${sv.fr || '—'}</td><td>${sv.spo2 || '—'}</td><td>${escapeHTML(sv.tax || '—')}</td><td>${escapeHTML(sv.obs || '')}</td></tr>`;
+            }
+        });
+        html += `</tbody></table></div>`;
+    }
+
+    // Glicemia
+    if ((data.glicemia || []).length > 0) {
+        html += `<h5 style="margin:0 0 6px;font-size:12px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.05em;">🩸 Glicemia Capilar</h5>
+        <table class="sv-table" style="font-size:11px;margin-bottom:16px;">
+        <thead><tr><th>Hora</th><th>Valor (mg/dL)</th><th>Insulina (UI)</th><th>Obs</th></tr></thead><tbody>`;
+        data.glicemia.forEach(g => {
+            html += `<tr><td>${g.hora || '—'}</td><td>${g.valor || '—'}</td><td>${g.insulina || '—'}</td><td>${escapeHTML(g.obs || '')}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+    }
+
+    // Ganhos / Infusões
+    if ((data.ganhos || []).length > 0) {
+        let totalGanhos = 0;
+        html += `<h5 style="margin:0 0 6px;font-size:12px;color:var(--accent);text-transform:uppercase;letter-spacing:.05em;">💧 Líquidos Infundidos (Ganhos)</h5>
+        <div style="overflow-x:auto;margin-bottom:16px;">
+        <table class="sv-table" style="font-size:11px;min-width:500px;">
+        <thead><tr><th>Solução / Droga</th><th style="text-align:center;">Total (mL)</th>`;
+        shiftHours.forEach(h => { html += `<th style="text-align:center;">${h}h</th>`; });
+        html += `</tr></thead><tbody>`;
+        data.ganhos.forEach(g => {
+            let rowTotal = 0;
+            if (g.volumes && Object.keys(g.volumes).length > 0) {
+                rowTotal = Object.values(g.volumes).reduce((s, v) => s + (parseFloat(v) || 0), 0);
+            }
+            if (rowTotal === 0) rowTotal = parseFloat(g.volume) || 0;
+            totalGanhos += rowTotal;
+            html += `<tr><td>${escapeHTML(g.descricao || '')}</td><td style="text-align:center;font-weight:700;color:var(--accent);">${rowTotal > 0 ? rowTotal : '—'}</td>`;
+            shiftHours.forEach(h => {
+                const val = (g.volumes && g.volumes[h]) ? parseFloat(g.volumes[h]) : 0;
+                html += `<td style="text-align:center;color:var(--accent);">${val > 0 ? val : '—'}</td>`;
+            });
+            html += `</tr>`;
+        });
+        html += `<tr style="background:rgba(13,91,143,0.07);font-weight:700;"><td>TOTAL GANHOS</td><td style="text-align:center;color:var(--accent);">${totalGanhos} mL</td><td colspan="${shiftHours.length}"></td></tr>`;
+        html += `</tbody></table></div>`;
+    }
+
+    // Alimentação Sólida / Nutrição
+    if ((data.alimentacao || []).length > 0) {
+        html += `<h5 style="margin:0 0 6px;font-size:12px;color:#10b981;text-transform:uppercase;letter-spacing:.05em;">🍎 Alimentação Sólida / Nutrição</h5>
+        <table class="sv-table" style="font-size:11px;margin-bottom:16px;">
+        <thead><tr><th>Hora</th><th>Refeição / Aceitação / Obs</th></tr></thead><tbody>`;
+        data.alimentacao.forEach(a => {
+            html += `<tr><td>${a.hora || '—'}</td><td>${escapeHTML(a.obs || '')}</td></tr>`;
+        });
+        html += `</tbody></table>`;
+    }
+
+    // Perdas
+    const totalDiurese = calcTotalDiurese(data);
+    const totalDrenos = calcTotalDrenos(data);
+    const totalHD = parseFloat(data.hd?.ufReal) || 0;
+    const totalEvac = (data.evacuacoes || []).reduce((s, e) => s + (parseFloat(e.volume) || 200), 0);
+    const totalPerdas = totalDiurese + totalDrenos + totalHD + totalEvac;
+
+    if (totalPerdas > 0 || (data.evacuacoes || []).length > 0) {
+        html += `<h5 style="margin:0 0 6px;font-size:12px;color:var(--danger);text-transform:uppercase;letter-spacing:.05em;">📤 Perdas</h5>
+        <table class="sv-table" style="font-size:11px;margin-bottom:16px;width:auto;">
+        <tbody>`;
+        if (totalDiurese > 0) html += `<tr><td>Diurese</td><td><strong>${totalDiurese} mL</strong></td></tr>`;
+        if (totalDrenos > 0) html += `<tr><td>Drenos</td><td><strong>${totalDrenos} mL</strong></td></tr>`;
+        if (totalHD > 0) {
+            const ufProg = parseFloat(data.hd?.ufProg) || 0;
+            html += `<tr><td>Hemodiálise (UF real${ufProg > 0 ? ` / prog: ${ufProg}` : ''})</td><td><strong>${totalHD} mL</strong></td></tr>`;
+        }
+        if ((data.evacuacoes || []).length > 0) html += `<tr><td>Evacuações (${data.evacuacoes.length}x)</td><td><strong>${totalEvac} mL</strong></td></tr>`;
+        html += `<tr style="background:rgba(220,38,38,0.06);font-weight:700;"><td>TOTAL PERDAS</td><td style="color:var(--danger);">${totalPerdas} mL</td></tr>`;
+        html += `</tbody></table>`;
+    }
+
+    // BH do turno
+    const totalGanhosFinal = calcTotalGanhos(data);
+    const bh = totalGanhosFinal - totalPerdas;
+    const bhSign = bh >= 0 ? '+' : '';
+    const bhColor = bh > 0 ? 'var(--accent)' : (bh < 0 ? 'var(--danger)' : 'var(--text-primary)');
+    const bhBg = bh > 200 ? 'rgba(13,91,143,0.07)' : (bh < -200 ? 'rgba(220,38,38,0.07)' : 'rgba(0,0,0,0.03)');
+
+    html += `<div style="background:${bhBg};border-radius:8px;padding:12px 16px;margin-top:4px;display:flex;gap:24px;flex-wrap:wrap;align-items:center;">
+        <div style="text-align:center;"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;">Ganhos</div><strong style="font-size:16px;color:var(--accent);">${totalGanhosFinal} mL</strong></div>
+        <div style="font-size:18px;color:var(--text-muted);">–</div>
+        <div style="text-align:center;"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;">Perdas</div><strong style="font-size:16px;color:var(--danger);">${totalPerdas} mL</strong></div>
+        <div style="font-size:18px;color:var(--text-muted);">=</div>
+        <div style="text-align:center;"><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;">Balanço Hídrico</div><strong style="font-size:22px;color:${bhColor};">${bhSign}${bh} mL</strong></div>
+    </div>`;
+
+    return html;
+}
+
+function renderConsolidadoTab() {
+    const container = document.getElementById('consolidado-content');
+    if (!container || state.currentBed === null) return;
+
+    const shifts = getLastTwoCompletedShiftInfos();
+    const bed = state.beds[state.currentBed] || { number: state.currentBed + 1 };
+    const peso = bed.peso ? `<span style="font-weight:700;color:#10b981;">⚖️ Peso registrado: ${bed.peso} kg</span>` : '';
+
+    let html = `<div style="margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;">
+        <p style="font-size:12px;color:var(--text-muted);margin:0;">Exibindo os 2 últimos balanços de 12h completos (modo de leitura). Turno atual não está incluído aqui.</p>
+        ${peso}
+    </div>`;
+
+    const hasAny = shifts.some(s => !!state.balanco[s.key]);
+
+    if (!hasAny) {
+        html += `<div class="section-card"><p style="color:var(--text-muted);font-style:italic;">Nenhum balanço anterior encontrado para este leito na data selecionada.</p></div>`;
+        container.innerHTML = html;
+        return;
+    }
+
+    shifts.forEach((shiftInfo, i) => {
+        const data = state.balanco[shiftInfo.key];
+        const headerBg = i === 0 ? 'var(--accent)' : '#64748b';
+        html += `<div style="margin-bottom:24px;border:1px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.05);">
+            <div style="background:${headerBg};padding:12px 16px;">
+                <h4 style="margin:0;color:white;font-size:14px;">${shiftInfo.label}</h4>
+                <div style="color:rgba(255,255,255,0.75);font-size:11px;margin-top:2px;">Balanço ${i === 0 ? 'mais recente' : 'anterior'} fechado</div>
+            </div>
+            <div style="padding:16px;background:var(--bg-card);">
+                ${renderShiftReadOnly(data, shiftInfo.hours)}
+            </div>
+        </div>`;
+    });
+
+    container.innerHTML = html;
 }
 
 // ===== PRINT =====

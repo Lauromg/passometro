@@ -83,6 +83,7 @@
                 <button class="tab-btn" onclick="switchTab('ganhos', this)">Ganhos (Infusão)</button>
                 <button class="tab-btn" onclick="switchTab('perdas', this)">Perdas</button>
                 <button class="tab-btn" onclick="switchTab('resumo', this)">Resumo / BH</button>
+                <button class="tab-btn" onclick="switchTab('consolidado', this)">📋 Últimos Balanços Consolidados</button>
             </div>
 
             <!-- TAB: SINAIS VITAIS -->
@@ -273,6 +274,22 @@
 
             <!-- TAB: RESUMO -->
             <div class="tab-content" id="tab-resumo">
+
+                <!-- PESO PACIENTE (Nutricionista) -->
+                <div class="section-card" style="margin-bottom:16px; border-left: 3px solid #10b981;">
+                    <h3>⚖️ Peso do Paciente</h3>
+                    <p style="font-size:12px;color:var(--text-muted);margin-bottom:12px;">Preenchido pela nutricionista. O valor será exibido no Passômetro médico.</p>
+                    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                        <div class="field-group" style="margin:0;">
+                            <label style="font-weight:600;font-size:13px;">Peso atual (kg)</label>
+                            <input type="number" id="peso-paciente" step="0.1" min="0" max="300" placeholder="Ex: 75.5"
+                                oninput="savePesoNutri(this.value)"
+                                style="max-width:160px; font-size:15px; font-weight:700; border:2px solid #10b981;">
+                        </div>
+                        <span id="peso-save-status" style="font-size:12px;font-weight:600;color:var(--text-muted);"></span>
+                    </div>
+                </div>
+
                 <div class="section-card">
                     <h3>📊 Balanço Hídrico</h3>
                     <div class="bh-summary" id="bh-summary">
@@ -297,6 +314,13 @@
                         Gerado automaticamente a partir dos dados lançados. Este resumo aparecerá no Passômetro médico.
                     </p>
                     <div class="resumo-badges" id="resumo-badges"></div>
+                </div>
+            </div>
+
+            <!-- TAB: ÚLTIMOS BALANÇOS CONSOLIDADOS -->
+            <div class="tab-content" id="tab-consolidado">
+                <div id="consolidado-content">
+                    <p style="color:var(--text-muted);font-style:italic;padding:16px;">Carregando balanços anteriores...</p>
                 </div>
             </div>
 
