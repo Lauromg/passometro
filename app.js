@@ -2814,9 +2814,39 @@ function clearPatient() {
   if (!confirm('Deseja realmente limpar todos os dados deste leito? Esta ação não pode ser desfeita.')) return;
   const bed = state.beds[state.currentBed];
   const num = bed.number;
+  
+  clearBalancoForBed(state.currentBed);
+  
   state.beds[state.currentBed] = createEmptyBed(num);
   renderPatientView();
   triggerSave();
+}
+
+async function clearBalancoForBed(bedIdx) {
+  if (!window.firebaseDb || !window.firebaseFirestore) return;
+  const { doc, updateDoc, deleteField } = window.firebaseFirestore;
+  const ref = doc(window.firebaseDb, 'passometro/balanco');
+  
+  const updates = {};
+  let hasUpdates = false;
+  
+  if (typeof balancoData !== 'undefined') {
+    for (const key of Object.keys(balancoData)) {
+      if (key.startsWith(bedIdx + '_')) {
+        updates[`data.${key}`] = deleteField();
+        hasUpdates = true;
+      }
+    }
+  }
+
+  if (hasUpdates) {
+    try {
+      await updateDoc(ref, updates);
+      console.log(`[PASS] Balanço do leito ${bedIdx} limpo com sucesso.`);
+    } catch (e) {
+      console.error('[PASS] Erro ao limpar balanço:', e);
+    }
+  }
 }
 
 // ===== TRANSFER BED =====
@@ -2919,6 +2949,8 @@ function confirmTransferBed() {
   // Clear origin
   state.beds[srcIdx] = createEmptyBed(srcNumber);
 
+  moveBalancoForBed(srcIdx, destIdx);
+
   closeTransferModal();
 
   // Navigate to the new bed
@@ -2926,6 +2958,45 @@ function confirmTransferBed() {
   triggerSave();
   renderPatientView();
   showSaveIndicator('saved', `✓ Paciente movido para Leito ${destNumber}`);
+}
+
+async function moveBalancoForBed(srcIdx, destIdx) {
+  if (!window.firebaseDb || !window.firebaseFirestore) return;
+  const { doc, updateDoc, deleteField } = window.firebaseFirestore;
+  const ref = doc(window.firebaseDb, 'passometro/balanco');
+  
+  const updates = {};
+  let hasUpdates = false;
+  
+  if (typeof balancoData !== 'undefined') {
+    // Clear destination first just in case
+    for (const key of Object.keys(balancoData)) {
+      if (key.startsWith(destIdx + '_')) {
+        updates[`data.${key}`] = deleteField();
+        hasUpdates = true;
+      }
+    }
+    // Move from src to dest
+    for (const key of Object.keys(balancoData)) {
+      if (key.startsWith(srcIdx + '_')) {
+        const parts = key.split('_'); // [srcIdx, date, shift]
+        parts[0] = destIdx.toString();
+        const newKey = parts.join('_');
+        updates[`data.${newKey}`] = balancoData[key];
+        updates[`data.${key}`] = deleteField();
+        hasUpdates = true;
+      }
+    }
+  }
+
+  if (hasUpdates) {
+    try {
+      await updateDoc(ref, updates);
+      console.log(`[PASS] Balanço transferido do leito ${srcIdx} para o ${destIdx}.`);
+    } catch (e) {
+      console.error('[PASS] Erro ao transferir balanço:', e);
+    }
+  }
 }
 
 // ===== HELPERS =====
