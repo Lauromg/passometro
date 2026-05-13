@@ -1374,36 +1374,47 @@ function renderEvolucao(bed) {
           <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted);">⟳ Atualizando resumo...</span>
         </div>
         <textarea onchange="updateResumoEvolucoes(this.value)" style="width: 100%; min-height: 100px; font-size: 13px; line-height: 1.5; color: var(--text-primary); background: rgba(255,255,255,0.7); border: 1px solid rgba(13,91,143,0.2); border-radius: 4px; padding: 8px; resize: vertical; font-family: inherit; box-sizing: border-box;">${escapeHTML(bed.resumoEvolucoes)}</textarea>
+        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+          <button onclick="copiarEvolucoesParaClipboard()" style="display:flex; align-items:center; gap:5px; font-size:12px; padding:5px 11px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); color:var(--text-secondary); cursor:pointer;">📋 Copiar evoluções</button>
+          <button onclick="abrirNoGemini()" style="display:flex; align-items:center; gap:5px; font-size:12px; padding:5px 11px; border:1px solid rgba(99,102,241,0.4); border-radius:6px; background:rgba(99,102,241,0.07); color:#4338ca; cursor:pointer;">🤖 Abrir no Gemini</button>
+        </div>
       </div>
     `;
   } else if (bed._quotaExhausted && bed.evolutions && bed.evolutions.length > 0) {
-    // Estado de cota esgotada: exibir aviso + opções manuais
+    // Cota esgotada: aviso + botões + campo manual
     aiSummaryHTML = `
       <div style="background: rgba(245,158,11,0.07); border: 1.5px solid rgba(245,158,11,0.5); border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
           <span style="font-size:18px;">⚠️</span>
-          <div>
+          <div style="flex:1;">
             <div style="font-weight:700; font-size:13px; color:#92400e;">Resumo automático temporariamente indisponível</div>
-            <div style="font-size:11px; color:#a16207; margin-top:2px;">O limite de uso mensal da IA foi atingido. Você pode gerar o resumo manualmente abaixo.</div>
+            <div style="font-size:11px; color:#a16207; margin-top:2px;">O limite de uso mensal da IA foi atingido. Use as opções abaixo para gerar manualmente.</div>
           </div>
+          <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted);">⟳ Gerando...</span>
         </div>
-
         <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
           <button onclick="copiarEvolucoesParaClipboard()" style="display:flex; align-items:center; gap:5px; font-size:12px; padding:6px 12px; border:1px solid rgba(245,158,11,0.6); border-radius:6px; background:rgba(255,255,255,0.8); color:#92400e; cursor:pointer; font-weight:600;">📋 Copiar evoluções</button>
           <button onclick="abrirNoGemini()" style="display:flex; align-items:center; gap:5px; font-size:12px; padding:6px 12px; border:1px solid rgba(99,102,241,0.5); border-radius:6px; background:rgba(99,102,241,0.08); color:#4338ca; cursor:pointer; font-weight:600;">🤖 Abrir no Gemini</button>
         </div>
-
-        <div style="font-size:12px; color:#78716c; margin-bottom:6px; font-weight:600;">Ou escreva o resumo manualmente:</div>
-        <textarea id="resumo-manual-input" placeholder="Cole aqui o resumo gerado pelo Gemini, ou escreva o seu próprio..." style="width:100%; min-height:90px; font-size:13px; line-height:1.5; color:var(--text-primary); background:rgba(255,255,255,0.85); border:1px solid rgba(245,158,11,0.4); border-radius:6px; padding:8px; resize:vertical; font-family:inherit; box-sizing:border-box;"></textarea>
+        <div style="font-size:12px; color:#78716c; margin-bottom:6px; font-weight:600;">Cole aqui o resumo gerado pelo Gemini:</div>
+        <textarea id="resumo-manual-input" placeholder="Cole o resumo gerado, ou escreva o seu próprio..." style="width:100%; min-height:90px; font-size:13px; line-height:1.5; color:var(--text-primary); background:rgba(255,255,255,0.85); border:1px solid rgba(245,158,11,0.4); border-radius:6px; padding:8px; resize:vertical; font-family:inherit; box-sizing:border-box;"></textarea>
         <button onclick="salvarResumoManual()" style="margin-top:8px; font-size:12px; padding:6px 14px; border:none; border-radius:6px; background:#d97706; color:white; cursor:pointer; font-weight:700;">💾 Salvar resumo</button>
-        <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted); margin-left:10px;">⟳ Gerando resumo...</span>
       </div>
     `;
   } else if (bed.evolutions && bed.evolutions.length > 0) {
+    // Sem resumo ainda: placeholder + botões sempre visíveis
     aiSummaryHTML = `
-      <div style="background: rgba(0,0,0,0.02); border: 1px dashed var(--border); padding: 12px; margin-bottom: 20px; border-radius: 4px; display:flex; justify-content:space-between; align-items:center;">
-         <span style="font-size:13px; color:var(--text-muted);">Nenhum resumo gerado ainda.</span>
-         <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted);">⟳ Gerando resumo...</span>
+      <div style="background: rgba(0,0,0,0.02); border: 1px dashed var(--border); padding: 12px 14px; margin-bottom: 20px; border-radius: 6px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:13px; color:var(--text-muted);">Nenhum resumo gerado ainda.</span>
+            <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted);">⟳ Gerando resumo...</span>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button onclick="copiarEvolucoesParaClipboard()" style="display:flex; align-items:center; gap:5px; font-size:12px; padding:5px 11px; border:1px solid var(--border); border-radius:6px; background:var(--bg-card); color:var(--text-secondary); cursor:pointer;">📋 Copiar evoluções</button>
+            <button onclick="abrirNoGemini()" style="display:flex; align-items:center; gap:5px; font-size:12px; padding:5px 11px; border:1px solid rgba(99,102,241,0.4); border-radius:6px; background:rgba(99,102,241,0.07); color:#4338ca; cursor:pointer;">🤖 Abrir no Gemini</button>
+          </div>
+        </div>
       </div>
     `;
   }
