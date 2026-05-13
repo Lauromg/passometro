@@ -1491,13 +1491,18 @@ async function requestEvolutionSummary(bedIdx) {
   } catch(e) {
     console.error("Erro ao gerar resumo IA:", e);
 
-    // Detectar erro de cota esgotada (HTTP 429 / RESOURCE_EXHAUSTED)
+    // Detectar erro de cota esgotada — Firebase SDK prefixa com "functions/"
     const isQuotaError = (
-      (e.code && (e.code === 'resource-exhausted' || e.code === 429)) ||
+      (e.code && (
+        e.code === 'functions/resource-exhausted' ||
+        e.code === 'resource-exhausted' ||
+        e.code === 429
+      )) ||
       (e.httpErrorCode && e.httpErrorCode.status === 429) ||
       (e.message && (
         e.message.includes('RESOURCE_EXHAUSTED') ||
-        e.message.includes('429') ||
+        e.message.includes('resource-exhausted') ||
+        e.message.includes('Cota mensal') ||
         e.message.includes('spending cap') ||
         e.message.includes('quota')
       ))

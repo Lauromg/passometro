@@ -68,7 +68,27 @@ ${evolucoesTexto}`;
       throw new HttpsError("internal", "Resposta do modelo estava vazia.");
     }
   } catch (error) {
+    // Se o erro já é um HttpsError (ex: lançado acima), re-lançar diretamente
+    if (error instanceof HttpsError) throw error;
+
     console.error("Erro ao chamar Gemini API:", error);
+
+    // Detectar cota esgotada (HTTP 429 / RESOURCE_EXHAUSTED da API do Gemini)
+    const isQuota =
+      error.status === 429 ||
+      (typeof error.message === "string" &&
+        (error.message.includes("RESOURCE_EXHAUSTED") ||
+          error.message.includes("429") ||
+          error.message.includes("spending cap") ||
+          error.message.includes("quota")));
+
+    if (isQuota) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Cota mensal da API do Gemini esgotada."
+      );
+    }
+
     throw new HttpsError(
       "internal",
       "Ocorreu um erro ao processar as evoluções com a IA."
