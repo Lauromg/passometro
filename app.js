@@ -3046,6 +3046,72 @@ function printPassometro() {
   window.print();
 }
 
+// ===== COPIAR TUDO (IA) =====
+function copiarTudoIA() {
+  let texto = "PASSÔMETRO UTI - " + formatDateBR(new Date()) + "\n\n";
+
+  state.beds.forEach((bed, idx) => {
+    if (!bed.name || bed.name.trim() === '') return; // Pula leito vazio
+
+    texto += `[LEITO ${bed.number}] - ${bed.name}`;
+    if (bed.age) texto += ` (${bed.age} anos)`;
+    if (bed.peso) texto += ` - ${bed.peso} kg`;
+    texto += "\n";
+
+    if (bed.dataInternacao) texto += `Data Internação: ${bed.dataInternacao} (DDI: ${calcDays(bed.dataInternacao)})\n`;
+    if (bed.diagnosticos) texto += `Diagnósticos Ativos:\n${bed.diagnosticos}\n`;
+    if (bed.hpp) texto += `HPP:\n${bed.hpp}\n`;
+    if (bed.hma) texto += `HMA:\n${bed.hma}\n`;
+
+    const activeDevices = DEVICES_LIST.filter(d => bed.devices && bed.devices[d.id]?.active);
+    if (activeDevices.length > 0) {
+      const devTexts = activeDevices.map(d => {
+        const detail = bed.devices[d.id]?.detail || '';
+        return detail ? `${d.name.split('(')[0].trim()}: ${detail}` : d.name.split('(')[0].trim();
+      });
+      texto += `Dispositivos/Drogas: ${devTexts.join(' | ')}\n`;
+    }
+
+    const allAtbs = (bed.antibiotics || []).filter(a => a.name.trim());
+    if (allAtbs.length > 0) {
+      const atbTexts = allAtbs.map(a => {
+        if (a.endDate) {
+          const endStr = a.endDate.split('-').reverse().join('/');
+          return `${a.name} (Finalizado: ${endStr})`;
+        } else {
+          return `${a.name} D${calcDays(a.startDate)}`;
+        }
+      });
+      texto += `Antibióticos: ${atbTexts.join(', ')}\n`;
+    }
+
+    const balancoSummary = getBalancoSummaryForBed(idx);
+    if (balancoSummary) {
+      texto += `Balanço/Sinais (Enfermagem): ${balancoSummary}\n`;
+    }
+
+    if (bed.pendencias && bed.pendencias.trim()) {
+      texto += `Pendências:\n${bed.pendencias}\n`;
+    }
+
+    const latestEvo = getLatestEvolution(bed);
+    if (bed.resumoEvolucoes) {
+      texto += `Última Evolução (IA):\n${bed.resumoEvolucoes}\n`;
+    } else if (latestEvo) {
+      texto += `Última Evolução (${latestEvo.shift === 'day' ? 'Dia' : 'Noite'} ${latestEvo.date}):\n${latestEvo.text}\n`;
+    }
+
+    texto += "\n--------------------------------------------------\n\n";
+  });
+
+  navigator.clipboard.writeText(texto).then(() => {
+    alert("Todos os dados do passômetro foram copiados para a área de transferência!");
+  }).catch(err => {
+    console.error('Erro ao copiar: ', err);
+    alert("Erro ao copiar os dados.");
+  });
+}
+
 // ===== LOGOUT =====
 function logout() {
   if (window.firebaseAuthModule) {
@@ -3211,10 +3277,14 @@ async function initApp() {
     dateEl.textContent = formatDateBR(new Date());
   }
 
-  // Show Sepse Admin button for Dr. Lauro
-  if (window.firebaseAuth && window.firebaseAuth.currentUser && window.firebaseAuth.currentUser.email === 'drlauromg@gmail.com.br') {
+  // Show admin buttons for Dr. Lauro
+  if (window.firebaseAuth && window.firebaseAuth.currentUser && 
+     (window.firebaseAuth.currentUser.email === 'drlauromg@gmail.com.br' || window.firebaseAuth.currentUser.email === 'drlauromg@gmail.com')) {
       const btnAdmin = document.getElementById('btn-sepse-admin');
       if (btnAdmin) btnAdmin.style.display = 'inline-block';
+      
+      const btnCopyAll = document.getElementById('btn-copy-all');
+      if (btnCopyAll) btnCopyAll.style.display = 'inline-block';
   }
 
   renderDashboard();
