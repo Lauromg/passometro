@@ -1376,6 +1376,29 @@ function renderEvolucao(bed) {
         <textarea onchange="updateResumoEvolucoes(this.value)" style="width: 100%; min-height: 100px; font-size: 13px; line-height: 1.5; color: var(--text-primary); background: rgba(255,255,255,0.7); border: 1px solid rgba(13,91,143,0.2); border-radius: 4px; padding: 8px; resize: vertical; font-family: inherit; box-sizing: border-box;">${escapeHTML(bed.resumoEvolucoes)}</textarea>
       </div>
     `;
+  } else if (bed._quotaExhausted && bed.evolutions && bed.evolutions.length > 0) {
+    // Estado de cota esgotada: exibir aviso + opções manuais
+    aiSummaryHTML = `
+      <div style="background: rgba(245,158,11,0.07); border: 1.5px solid rgba(245,158,11,0.5); border-radius: 8px; padding: 14px 16px; margin-bottom: 20px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <span style="font-size:18px;">⚠️</span>
+          <div>
+            <div style="font-weight:700; font-size:13px; color:#92400e;">Resumo automático temporariamente indisponível</div>
+            <div style="font-size:11px; color:#a16207; margin-top:2px;">O limite de uso mensal da IA foi atingido. Você pode gerar o resumo manualmente abaixo.</div>
+          </div>
+        </div>
+
+        <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+          <button onclick="copiarEvolucoesParaClipboard()" style="display:flex; align-items:center; gap:5px; font-size:12px; padding:6px 12px; border:1px solid rgba(245,158,11,0.6); border-radius:6px; background:rgba(255,255,255,0.8); color:#92400e; cursor:pointer; font-weight:600;">📋 Copiar evoluções</button>
+          <button onclick="abrirNoGemini()" style="display:flex; align-items:center; gap:5px; font-size:12px; padding:6px 12px; border:1px solid rgba(99,102,241,0.5); border-radius:6px; background:rgba(99,102,241,0.08); color:#4338ca; cursor:pointer; font-weight:600;">🤖 Abrir no Gemini</button>
+        </div>
+
+        <div style="font-size:12px; color:#78716c; margin-bottom:6px; font-weight:600;">Ou escreva o resumo manualmente:</div>
+        <textarea id="resumo-manual-input" placeholder="Cole aqui o resumo gerado pelo Gemini, ou escreva o seu próprio..." style="width:100%; min-height:90px; font-size:13px; line-height:1.5; color:var(--text-primary); background:rgba(255,255,255,0.85); border:1px solid rgba(245,158,11,0.4); border-radius:6px; padding:8px; resize:vertical; font-family:inherit; box-sizing:border-box;"></textarea>
+        <button onclick="salvarResumoManual()" style="margin-top:8px; font-size:12px; padding:6px 14px; border:none; border-radius:6px; background:#d97706; color:white; cursor:pointer; font-weight:700;">💾 Salvar resumo</button>
+        <span id="ai-summary-loading" style="display:none; font-size:11px; color:var(--text-muted); margin-left:10px;">⟳ Gerando resumo...</span>
+      </div>
+    `;
   } else if (bed.evolutions && bed.evolutions.length > 0) {
     aiSummaryHTML = `
       <div style="background: rgba(0,0,0,0.02); border: 1px dashed var(--border); padding: 12px; margin-bottom: 20px; border-radius: 4px; display:flex; justify-content:space-between; align-items:center;">
@@ -1457,6 +1480,7 @@ async function requestEvolutionSummary(bedIdx) {
 
     const result = await gerarResumo({ evolutions: bed.evolutions, antibiotics: bed.antibiotics });
     if (result.data && result.data.resumo) {
+       bed._quotaExhausted = false;
        bed.resumoEvolucoes = result.data.resumo;
        triggerSave();
        if (state.currentBed === bedIdx) {
@@ -1466,9 +1490,30 @@ async function requestEvolutionSummary(bedIdx) {
     }
   } catch(e) {
     console.error("Erro ao gerar resumo IA:", e);
-    showSaveIndicator('error', 'Erro na IA do Resumo');
-    const loadingEl = document.getElementById('ai-summary-loading');
-    if (loadingEl) loadingEl.style.display = 'none';
+
+    // Detectar erro de cota esgotada (HTTP 429 / RESOURCE_EXHAUSTED)
+    const isQuotaError = (
+      (e.code && (e.code === 'resource-exhausted' || e.code === 429)) ||
+      (e.httpErrorCode && e.httpErrorCode.status === 429) ||
+      (e.message && (
+        e.message.includes('RESOURCE_EXHAUSTED') ||
+        e.message.includes('429') ||
+        e.message.includes('spending cap') ||
+        e.message.includes('quota')
+      ))
+    );
+
+    if (isQuotaError) {
+      bed._quotaExhausted = true;
+      showSaveIndicator('error', '⚠️ Cota da IA esgotada — use o modo manual');
+      if (state.currentBed === bedIdx) {
+        renderEvolucao(bed);
+      }
+    } else {
+      showSaveIndicator('error', 'Erro na IA do Resumo');
+      const loadingEl = document.getElementById('ai-summary-loading');
+      if (loadingEl) loadingEl.style.display = 'none';
+    }
   }
 }
 
@@ -1477,6 +1522,56 @@ window.updateResumoEvolucoes = function(newText) {
   if (!bed) return;
   bed.resumoEvolucoes = newText;
   triggerSave();
+};
+
+// Retorna o texto concatenado das evoluções sem dados identificadores
+function getTextoEvolucoesParaIA(bed) {
+  if (!bed || !bed.evolutions || bed.evolutions.length === 0) return '';
+  const sorted = [...bed.evolutions].sort((a, b) => {
+    const da = new Date(a.date.split('/').reverse().join('-') + 'T' + (a.shift === 'day' ? '07:00' : '19:00'));
+    const db_ = new Date(b.date.split('/').reverse().join('-') + 'T' + (b.shift === 'day' ? '07:00' : '19:00'));
+    return da - db_;
+  });
+  return sorted.map(evo => {
+    const turno = evo.shift === 'day' ? 'Diurno' : 'Noturno';
+    return `[Data: ${evo.date} | Turno: ${turno}]\n${evo.text}`;
+  }).join('\n\n---\n\n');
+}
+
+window.copiarEvolucoesParaClipboard = async function() {
+  const bed = state.beds[state.currentBed];
+  const texto = getTextoEvolucoesParaIA(bed);
+  if (!texto) { showSaveIndicator('error', 'Nenhuma evolução para copiar'); return; }
+  try {
+    await navigator.clipboard.writeText(texto);
+    showSaveIndicator('saved', '✓ Evoluções copiadas!');
+  } catch(err) {
+    console.error('Falha ao copiar:', err);
+    showSaveIndicator('error', 'Erro ao copiar');
+  }
+};
+
+window.abrirNoGemini = function() {
+  const bed = state.beds[state.currentBed];
+  const textoEvolucoes = getTextoEvolucoesParaIA(bed);
+  if (!textoEvolucoes) { showSaveIndicator('error', 'Nenhuma evolução disponível'); return; }
+  const prompt = `Você é um assistente médico. Com base nas evoluções clínicas abaixo, gere um resumo clínico objetivo para passagem de plantão em UTI, destacando diagnósticos, condutas em andamento, pendências e intercorrências relevantes. Evoluções: ${textoEvolucoes}`;
+  const url = `https://gemini.google.com/app?q=${encodeURIComponent(prompt)}`;
+  window.open(url, '_blank');
+};
+
+window.salvarResumoManual = function() {
+  const input = document.getElementById('resumo-manual-input');
+  if (!input) return;
+  const texto = input.value.trim();
+  if (!texto) { alert('O campo de resumo está vazio.'); return; }
+  const bed = state.beds[state.currentBed];
+  if (!bed) return;
+  bed.resumoEvolucoes = texto;
+  bed._quotaExhausted = false;
+  triggerSave();
+  renderEvolucao(bed);
+  showSaveIndicator('saved', '✓ Resumo manual salvo!');
 };
 
 async function copyEvolutionFormat(idx) {
