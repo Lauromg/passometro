@@ -3279,7 +3279,7 @@ async function initApp() {
 
   // Show admin buttons for Dr. Lauro
   if (window.firebaseAuth && window.firebaseAuth.currentUser && 
-     (window.firebaseAuth.currentUser.email === 'drlauromg@gmail.com.br' || window.firebaseAuth.currentUser.email === 'drlauromg@gmail.com')) {
+      window.firebaseAuth.currentUser.email === 'lauro.mg@hotmail.com') {
       const btnAdmin = document.getElementById('btn-sepse-admin');
       if (btnAdmin) btnAdmin.style.display = 'inline-block';
       
