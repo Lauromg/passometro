@@ -208,6 +208,74 @@ async function saveFirebase(keyToSave = null) {
     }
 }
 
+function mergeShiftData(local, remote) {
+    if (!local) return JSON.parse(JSON.stringify(remote || {}));
+    if (!remote) return local;
+
+    const merged = JSON.parse(JSON.stringify(remote));
+
+    const activeTabEl = document.querySelector('.tab-content.active');
+    const activeTabId = activeTabEl ? activeTabEl.id : '';
+
+    // 1. Merge Sinais Vitais (SVs)
+    if (local.sinaisVitais) {
+        if (!merged.sinaisVitais) merged.sinaisVitais = {};
+        Object.keys(local.sinaisVitais).forEach(hour => {
+            if (!merged.sinaisVitais[hour]) merged.sinaisVitais[hour] = {};
+            const localSV = local.sinaisVitais[hour] || {};
+            const remoteSV = merged.sinaisVitais[hour] || {};
+            
+            ['pa', 'fc', 'fr', 'spo2', 'tax', 'obs'].forEach(field => {
+                const isFocused = document.activeElement && 
+                                  document.activeElement.tagName === 'INPUT' && 
+                                  document.activeElement.getAttribute('data-hour') === hour && 
+                                  document.activeElement.getAttribute('data-field') === field;
+                if (isFocused) {
+                    merged.sinaisVitais[hour][field] = document.activeElement.value;
+                } else {
+                    if (remoteSV[field] !== undefined && remoteSV[field] !== '') {
+                        merged.sinaisVitais[hour][field] = remoteSV[field];
+                    } else if (localSV[field] !== undefined) {
+                        merged.sinaisVitais[hour][field] = localSV[field];
+                    }
+                }
+            });
+        });
+    }
+
+    // 2. Merge List/Array Sections
+    // Glicemia
+    if (activeTabId === 'tab-glicemia') {
+        merged.glicemia = local.glicemia || [];
+    } else {
+        merged.glicemia = remote.glicemia || [];
+    }
+
+    // Ganhos & Alimentacao
+    if (activeTabId === 'tab-ganhos') {
+        merged.ganhos = local.ganhos || [];
+        merged.alimentacao = local.alimentacao || [];
+    } else {
+        merged.ganhos = remote.ganhos || [];
+        merged.alimentacao = remote.alimentacao || [];
+    }
+
+    // Perdas (Diurese, Evacuacoes, Drenos, HD)
+    if (activeTabId === 'tab-perdas') {
+        merged.diurese = local.diurese || [];
+        merged.evacuacoes = local.evacuacoes || [];
+        merged.drenos = local.drenos || [];
+        merged.hd = local.hd || { ufProg: '', ufReal: '', duracao: '' };
+    } else {
+        merged.diurese = remote.diurese || [];
+        merged.evacuacoes = remote.evacuacoes || [];
+        merged.drenos = remote.drenos || [];
+        merged.hd = remote.hd || { ufProg: '', ufReal: '', duracao: '' };
+    }
+
+    return merged;
+}
+
 async function loadFirebase() {
     if (!window.firebaseDb || !window.firebaseFirestore || !window.firebaseAuth?.currentUser) return false;
     try {
@@ -221,10 +289,21 @@ async function loadFirebase() {
             window.unsubFirebaseBalanco = onSnapshot(ref, (snap) => {
                 if (snap.exists() && snap.data().data) {
                     const dbData = snap.data().data;
+                    const currentKey = state.currentBed !== null ? getShiftKey(state.currentBed, state.currentDate, state.currentShift) : null;
+                    
+                    // 1. Clean up local keys that were deleted from Firestore
+                    Object.keys(state.balanco).forEach(key => {
+                        if (dbData[key] === undefined) {
+                            delete state.balanco[key];
+                        }
+                    });
+
+                    // 2. Load / Merge data
                     Object.keys(dbData).forEach(key => {
-                        const currentKey = state.currentBed !== null ? getShiftKey(state.currentBed, state.currentDate, state.currentShift) : null;
-                        if (key !== currentKey || !state.balanco[key]) {
+                        if (key !== currentKey) {
                             state.balanco[key] = dbData[key];
+                        } else {
+                            state.balanco[key] = mergeShiftData(state.balanco[key], dbData[key]);
                         }
                     });
                     saveLocal();
@@ -232,6 +311,15 @@ async function loadFirebase() {
                     const viewDash = document.getElementById('view-dashboard');
                     if (viewDash && viewDash.style.display !== 'none') {
                         renderDashboard();
+                    } else if (state.currentBed !== null) {
+                        const isEditing = document.activeElement && 
+                                         (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') && 
+                                         document.activeElement.closest('#view-balance');
+                        if (!isEditing) {
+                            renderAllTabs();
+                        } else {
+                            console.log('[ENF] Silently merged remote updates to avoid disrupting active typing');
+                        }
                     }
                 }
                 resolve(true);
@@ -292,6 +380,7 @@ function triggerSave() {
     saveTimeout = setTimeout(() => {
         showSaveIndicator('saving', '⟳ Salvando...');
         saveFirebase(lastEditedKey);
+        saveTimeout = null;
     }, 1500);
 }
 
@@ -414,12 +503,12 @@ function renderSinaisVitais() {
         const sv = data.sinaisVitais[h] || {};
         html += `<tr>
       <td class="sv-hour">${h}:00</td>
-      <td><input type="text" value="${escapeHTML(sv.pa || '')}" placeholder="120/80" onchange="updateSV('${h}','pa',this.value)"></td>
-      <td><input type="number" value="${sv.fc || ''}" placeholder="78" onchange="updateSV('${h}','fc',this.value)"></td>
-      <td><input type="number" value="${sv.fr || ''}" placeholder="18" onchange="updateSV('${h}','fr',this.value)"></td>
-      <td><input type="number" value="${sv.spo2 || ''}" placeholder="97" onchange="updateSV('${h}','spo2',this.value)"></td>
-      <td><input type="text" value="${escapeHTML(sv.tax || '')}" placeholder="36.5" onchange="updateSV('${h}','tax',this.value)"></td>
-      <td><input type="text" value="${escapeHTML(sv.obs || '')}" placeholder="" onchange="updateSV('${h}','obs',this.value)"></td>
+      <td><input type="text" data-hour="${h}" data-field="pa" value="${escapeHTML(sv.pa || '')}" placeholder="120/80" onchange="updateSV('${h}','pa',this.value)"></td>
+      <td><input type="number" data-hour="${h}" data-field="fc" value="${sv.fc || ''}" placeholder="78" onchange="updateSV('${h}','fc',this.value)"></td>
+      <td><input type="number" data-hour="${h}" data-field="fr" value="${sv.fr || ''}" placeholder="18" onchange="updateSV('${h}','fr',this.value)"></td>
+      <td><input type="number" data-hour="${h}" data-field="spo2" value="${sv.spo2 || ''}" placeholder="97" onchange="updateSV('${h}','spo2',this.value)"></td>
+      <td><input type="text" data-hour="${h}" data-field="tax" value="${escapeHTML(sv.tax || '')}" placeholder="36.5" onchange="updateSV('${h}','tax',this.value)"></td>
+      <td><input type="text" data-hour="${h}" data-field="obs" value="${escapeHTML(sv.obs || '')}" placeholder="" onchange="updateSV('${h}','obs',this.value)"></td>
     </tr>`;
     });
     tbody.innerHTML = html;
@@ -1055,7 +1144,15 @@ function renderConsolidadoTab() {
     const hasAny = shifts.some(s => !!state.balanco[s.key]);
 
     if (!hasAny) {
-        html += `<div class="section-card"><p style="color:var(--text-muted);font-style:italic;">Nenhum balanço anterior encontrado para este leito na data selecionada.</p></div>`;
+        const availableKeysForBed = Object.keys(state.balanco).filter(k => k.startsWith(state.currentBed + '_'));
+        html += `<div class="section-card">
+            <p style="color:var(--text-muted);font-style:italic;">Nenhum balanço anterior encontrado para este leito na data selecionada.</p>
+            <p style="font-size: 11px; color: var(--text-muted); margin-top: 10px; border-top: 1px solid var(--border); padding-top: 10px;">
+                <strong>🔍 Diagnóstico do Sistema:</strong><br>
+                • Chaves procuradas: <code>${shifts.map(s => s.key).join(', ') || 'nenhuma'}</code><br>
+                • Balanços salvos em cache para este leito: <code>${availableKeysForBed.length > 0 ? availableKeysForBed.join(', ') : 'nenhum registro encontrado'}</code>
+            </p>
+        </div>`;
         container.innerHTML = html;
         return;
     }

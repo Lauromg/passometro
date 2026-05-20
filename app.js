@@ -177,14 +177,14 @@ function initState() {
 let saveTimeout = null;
 let firebaseReady = false;
 
-function showSaveIndicator(type, text) {
+function showSaveIndicator(type, text, duration = 2000) {
   const el = document.getElementById('save-indicator');
   if (!el) return;
   el.className = 'save-indicator show ' + type;
   el.textContent = text;
   setTimeout(() => {
     el.classList.remove('show');
-  }, 2000);
+  }, duration);
 }
 
 function saveLocal() {
@@ -1554,27 +1554,53 @@ function getTextoEvolucoesParaIA(bed) {
   }).join('\n\n---\n\n');
 }
 
+// Monta o prompt completo (instrução + evoluções) pronto para colar no Gemini
+function montarPromptGemini(bed) {
+  const textoEvolucoes = getTextoEvolucoesParaIA(bed);
+  if (!textoEvolucoes) return null;
+  return `Você é um médico intensivista experiente. Com base nas evoluções clínicas abaixo de um paciente internado em UTI, gere um resumo conciso e objetivo para passagem de plantão. Destaque:
+- Diagnósticos principais
+- Condutas em andamento
+- Intercorrências relevantes
+- Pendências do plantão
+Não invente informações. Use apenas o que está nas evoluções. Seja direto e use linguagem médica.
+
+Evoluções do paciente:
+${textoEvolucoes}`;
+}
+
 window.copiarEvolucoesParaClipboard = async function() {
   const bed = state.beds[state.currentBed];
-  const texto = getTextoEvolucoesParaIA(bed);
-  if (!texto) { showSaveIndicator('error', 'Nenhuma evolução para copiar'); return; }
+  const prompt = montarPromptGemini(bed);
+  if (!prompt) { showSaveIndicator('error', 'Nenhuma evolução para copiar'); return; }
   try {
-    await navigator.clipboard.writeText(texto);
-    showSaveIndicator('saved', '✓ Evoluções copiadas!');
+    await navigator.clipboard.writeText(prompt);
+    showSaveIndicator('saved', '✓ Prompt copiado! Cole no Gemini');
   } catch(err) {
     console.error('Falha ao copiar:', err);
     showSaveIndicator('error', 'Erro ao copiar');
   }
 };
 
-window.abrirNoGemini = function() {
+window.abrirNoGemini = async function() {
   const bed = state.beds[state.currentBed];
-  const textoEvolucoes = getTextoEvolucoesParaIA(bed);
-  if (!textoEvolucoes) { showSaveIndicator('error', 'Nenhuma evolução disponível'); return; }
-  const prompt = `Você é um assistente médico. Com base nas evoluções clínicas abaixo, gere um resumo clínico objetivo para passagem de plantão em UTI, destacando diagnósticos, condutas em andamento, pendências e intercorrências relevantes. Evoluções: ${textoEvolucoes}`;
-  const url = `https://gemini.google.com/app?q=${encodeURIComponent(prompt)}`;
-  window.open(url, '_blank');
+  const prompt = montarPromptGemini(bed);
+  if (!prompt) { showSaveIndicator('error', 'Nenhuma evolução disponível'); return; }
+
+  // Copiar o prompt para a área de transferência
+  try {
+    await navigator.clipboard.writeText(prompt);
+  } catch(err) {
+    console.error('Falha ao copiar prompt:', err);
+  }
+
+  // Abrir o Gemini
+  window.open('https://gemini.google.com/app', '_blank');
+
+  // Exibir aviso longo para orientar o usuário
+  showSaveIndicator('saved', '✓ Prompt copiado! Cole com Ctrl+V no Gemini', 5000);
 };
+
 
 window.salvarResumoManual = function() {
   const input = document.getElementById('resumo-manual-input');
