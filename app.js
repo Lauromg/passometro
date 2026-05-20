@@ -258,6 +258,48 @@ let balancoData = {};
 let unsubscribeBalanco = null;
 let balancoPromise = null;
 
+async function cleanupOldBalancoData() {
+  if (!window.firebaseDb || !window.firebaseFirestore) return;
+  const { doc, updateDoc, deleteField } = window.firebaseFirestore;
+  const ref = doc(window.firebaseDb, 'passometro/balanco');
+  
+  if (typeof balancoData === 'undefined' || Object.keys(balancoData).length === 0) return;
+
+  const today = new Date();
+  const cutoffDate = new Date(today);
+  cutoffDate.setDate(cutoffDate.getDate() - 15); // Keep last 15 days
+  
+  const updates = {};
+  let count = 0;
+  
+  for (const key of Object.keys(balancoData)) {
+      // key format: "bedIdx_YYYY-MM-DD_shift"
+      const parts = key.split('_');
+      if (parts.length >= 2) {
+          const dateStr = parts[1];
+          // dateStr is like 2026-05-20
+          const dateObj = new Date(dateStr + 'T12:00:00');
+          if (dateObj < cutoffDate) {
+              updates[`data.${key}`] = deleteField();
+              count++;
+          }
+      }
+  }
+  
+  if (count > 0) {
+      console.log(`[PASS] Cleaning up ${count} old balance entries (>15 days)...`);
+      try {
+          await updateDoc(ref, updates);
+          console.log('[PASS] Old balances cleaned up successfully.');
+          for (const key of Object.keys(balancoData)) {
+              if (updates[`data.${key}`]) delete balancoData[key];
+          }
+      } catch (e) {
+          console.error('[PASS] Error cleaning up old balances:', e);
+      }
+  }
+}
+
 function loadBalancoData() {
   if (!window.firebaseDb || !window.firebaseFirestore || !window.firebaseAuth?.currentUser) {
     console.warn('[PASS] Cannot load balanco: Firebase not ready or not logged in');
@@ -3407,6 +3449,7 @@ async function initApp() {
 
   // Load nursing balance data
   await loadBalancoData();
+  await cleanupOldBalancoData();
 
   // Update header date
   const dateEl = document.getElementById('header-date');
